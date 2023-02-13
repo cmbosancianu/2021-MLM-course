@@ -91,7 +91,7 @@ knitr::opts_chunk$set(echo = FALSE,
                       eval = TRUE)
 
 library(pacman)
-p_load(tidyverse, scales, texreg, nlme, broom, arm,
+p_load(tidyverse, scales, texreg, nlme, broom, arm, ggthemes,
        kableExtra)
 
 # Define the color scheme for all the plots in the slides
@@ -278,13 +278,14 @@ mlDF <- data.frame(culture = c("Ankole", "Ankole", "Toro", "Toro", "Suku", "Suku
                            0.12, 0.08, 0.07, 0.19, 0.21, 0.09, 0.11, 0.06, NA))
 
 graph1 <- ggplot(mlDF %>% arrange(pse) %>%
-                   mutate(culture=factor(culture, levels=culture[group=="Adults"])),
+                   mutate(culture = factor(culture,
+                                           levels = culture[group == "Adults"])),
                  aes(x = culture,
                      y = pse,
                      fill = group)) +
   geom_bar(stat = "identity", position = "dodge") +
-  theme_bw() +
-  scale_fill_Publication(name = "Population") +
+  theme_clean() +
+  scale_fill_Pres(name = "Population") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
         axis.text.y = element_text(size = 14),
         axis.line.x = element_line(),
@@ -531,7 +532,7 @@ gr1 <- ggplot(subset(df_coef, df_coef$term == "as.factor(incquart)4"),
                     ymax = estimate + 1.96*std.error),
                 width = 0.01,
                 linewidth = 1.25) +
-  theme_bw() +
+  theme_clean() +
   geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1.5,
              color = rgb(255,0,90, maxColorValue = 255)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
@@ -815,23 +816,23 @@ df_sub %>%
   filter(term == "educ") %>%
   dplyr::select(-c(statistic, p.value)) %>%
   ggplot(aes(x = reorder(cnt, -estimate), y = estimate)) +
-    geom_hline(yintercept = cpoolBeta, linewidth = 1.25,
-               color = rgb(255, 0, 90, maxColorValue = 255)) +
-    geom_hline(yintercept = cpoolBeta - 1.96*cpoolSEBeta, linewidth = 1.25,
-               linetype = "dashed") +
-    geom_hline(yintercept = cpoolBeta + 1.96*cpoolSEBeta, linewidth = 1.25,
-               linetype = "dashed") +
-    geom_hline(yintercept = 0, linewidth = 1.5, linetype = "dashed") +
-    geom_point(size = 3) +
-    geom_errorbar(aes(ymin = estimate - 1.96*std.error,
-                      ymax = estimate + 1.96*std.error),
-                  width = 0.01,
-                  linewidth = 1.25) +
-    labs(x = "Country",
-         y = "Slope for education") +
-    theme_bw() +
+  geom_hline(yintercept = cpoolBeta, linewidth = 1.25,
+             color = rgb(255, 0, 90, maxColorValue = 255)) +
+  geom_hline(yintercept = cpoolBeta - 1.96*cpoolSEBeta, linewidth = 1.25,
+             linetype = "dashed") +
+  geom_hline(yintercept = cpoolBeta + 1.96*cpoolSEBeta, linewidth = 1.25,
+             linetype = "dashed") +
+  geom_hline(yintercept = 0, linewidth = 1.5, linetype = "dashed") +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),
+                width = 0.01,
+                linewidth = 1.25) +
+  labs(x = "Country",
+       y = "Slope for education") +
+  theme_clean() +
   annotate("label", x = "VE", y = 0.07,
-           label = "Red line is slope for education from complete pooling model") +
+           label = "Red line is slope for education from complete pooling model") + # nolint
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
         axis.text.y = element_text(size = 14),
         axis.title.y = element_text(size = 16))

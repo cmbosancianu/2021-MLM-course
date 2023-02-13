@@ -1,5 +1,5 @@
 % Taken from: https://mikedewar.wordpress.com/2009/02/25/latex-beamer-python-beauty/
-\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169]{beamer}
+\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169,handout]{beamer}
 \usetheme{default}
 \beamertemplatenavigationsymbolsempty
 \definecolor{fore}{RGB}{51,51,51}
@@ -72,7 +72,7 @@ pdfkeywords={Bamberg, workshop, MLM, slides, 2021}}
 \title{Multilevel Modeling: Principles and Applications in \texttt{R}}
 \subtitle{Day 3: Modeling Change over Time}
 \author{Constantin Manuel Bosancianu}
-\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:manuel.bosancianu@gmail.com}{manuel.bosancianu@gmail.com}}
+\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:bosancianu@icloud.com}{bosancianu@icloud.com}}
 \date{January 22, 2021}
 \begin{document}
 \maketitle
@@ -92,18 +92,9 @@ knitr::opts_chunk$set(echo = FALSE,
                       comment = NA,
                       eval = TRUE)
 
-check.packages <- function(pkg){
-  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
-  if (length(new.pkg))
-    install.packages(new.pkg, dependencies = TRUE,
-                     repos = "https://cran.rstudio.com")
-  sapply(pkg, require, character.only = TRUE)
-}
-
-pkgList <- c("tidyverse","scales","texreg","nlme","broom",
-             "arm","kableExtra","broom.mixed","ggeffects",
-             "interplot","ggthemes","xtable")
-check.packages(pkgList)
+library(pacman)
+p_load(tidyverse, scales, texreg, nlme, broom, arm, kableExtra,
+       broom.mixed, ggeffects, interplot, ggthemes, xtable)
 
 # Define the color scheme for all the plots in the slides
 scale_fill_Pres <- function(...){
@@ -161,59 +152,12 @@ It takes some practice to adjust the interpretation of some of the measures from
 \begin{frame}
   \frametitle{2 kinds of questions}
 
-<<r showing-change-1-NOT-USED, eval=generateFigs>>=
-load("../../../../11-Data-repository/14-SWIID/swiid9_0.rda")
-
-swiid <- swiid_summary
-rm(swiid_summary)
-
-graph1 <- swiid %>%
-  dplyr::select(-c(gini_disp_se,gini_mkt,gini_mkt_se,
-                   redist_after,redist,abs_red,
-                   abs_red_se,rel_red,rel_red_se)) %>%
-  rename(gini = gini_disp) %>%
-  mutate(country = as.character(country),
-         year = as.numeric(year),
-         country = ifelse(country=="Korea", "South Korea", country)) %>%
-  filter(year >= 1990) %>%
-  mutate(cluster = case_when(year >= 1990 & year <= 1994 ~ 1,
-                             year >= 1995 & year <= 1999 ~ 2,
-                             year >= 2000 & year <= 2004 ~ 3,
-                             year >= 2005 & year <= 2009 ~ 4,
-                             year >= 2010 & year <= 2014 ~ 5,
-                             year >= 2015 & year <= 2019 ~ 6)) %>%
-  group_by(country, cluster) %>%
-  summarise(gini = mean(gini, na.rm = TRUE)) %>%
-  filter(country %in% c("Australia","Belgium","Brazil","Canada","Germany",
-                        "France","Denmark","Norway","Chile","India",
-                        "Argentina","Russia","Egypt","United Kingdom",
-                        "Hungary","Italy")) %>%
-  ggplot(aes(x = cluster,
-             y = gini)) +
-  geom_point(size = 4) +
-  labs(x = "Time period",
-       y = "Average Gini") +
-  theme_clean() +
-  facet_wrap(.~country, ncol = 4) +
-  theme(axis.text.x = element_text(angle = 45, size = 12, hjust = 0.75),
-        axis.text.y = element_text(size = 12),
-        strip.text.x = element_text(size = 12),
-        axis.title = element_text(size = 14)) +
-  scale_x_continuous(breaks = c(1,2,3,4,5,6),
-                     labels = c("90-94","95-99","00-04","05-09",
-                                "10-14","15-19"))
-ggsave(graph1,
-       file = "../03-graphs/03-01.pdf",
-       height = 9, width = 12)
-rm(graph1)
-@
-
 <<r showing-change-1, eval=generateFigs>>=
-tolDF <- read.table("../02-data/ALDA_tolerance_data.txt",
-                    header = TRUE,
-                    sep = ",")
+df_tol <- read.table("../02-data/03-ALDA-tolerance.txt",
+                     header = TRUE,
+                     sep = ",")
 
-graph1 <- tolDF %>%
+graph1 <- df_tol %>%
   filter(id %in% c(514, 723, 949, 1552,
                    45, 1653, 268, 569)) %>%
   ggplot(aes(x = time,
@@ -312,7 +256,7 @@ The first goal is to describe the change (\textit{growth trajectory}) using empi
 Use a nonparametric functional form, e.g. \textit{lowess}, to allow the data to speak for itself, and then try to visually capture commonalities in trajectories.
 
 <<r showing-change-2, eval=generateFigs>>=
-graph2 <- tolDF %>%
+graph2 <- df_tol %>%
   filter(id %in% c(514, 723, 949, 1552,
                    45, 1653, 268, 569)) %>%
   ggplot(aes(x = time,
@@ -348,7 +292,7 @@ rm(graph2)
 Try to see how a parametric form works, e.g. OLS, in capturing the trends you have observed.\pause
 
 <<r showing-change-3, eval=generateFigs>>=
-graph3 <- tolDF %>%
+graph3 <- df_tol %>%
   filter(id %in% c(514, 723, 949, 1552,
                    45, 1653, 268, 569)) %>%
   ggplot(aes(x = time,
@@ -383,7 +327,7 @@ rm(graph3)
 Finally, if still far from a proper description, alter the parametric form by allowing for non-constant change over time.\pause
 
 <<r showing-change-4, eval=generateFigs>>=
-graph4 <- tolDF %>%
+graph4 <- df_tol %>%
   filter(id %in% c(514, 723, 949, 1552,
                    45, 1653, 268, 569)) %>%
   ggplot(aes(x = time,
@@ -393,7 +337,8 @@ graph4 <- tolDF %>%
        y = "Tolerance score") +
   theme_clean() +
   facet_wrap(.~id, ncol = 4) +
-    geom_smooth(method = "lm", se = FALSE, formula = y ~ x + I(x^2), size = 1) +
+  geom_smooth(method = "lm", se = FALSE, formula = y ~ x + I(x^2),
+              linewidth = 1) +
   theme(axis.text.x = element_text(size = 12),
         axis.text.y = element_text(size = 12),
         strip.text.x = element_text(size = 12),
@@ -434,11 +379,11 @@ More informative: split these trends up based on theoretically-relevant time-inv
   \frametitle{Describe longitudinal trend (5)}
 
 <<r describe-change-numeric, eval=generateFigs>>=
-resultsDF <- tolDF %>%
+df_results <- df_tol %>%
   filter(id %in% c(514, 723, 949, 1552,
                    45, 1653, 268, 569)) %>%
   dplyr::select(-age, -male, -exposure) %>%
-  mutate(quad = time*time) %>%
+  mutate(quad = time * time) %>%
   nest(data = -id) %>%
   mutate(fit = map(data, ~ lm(tolerance ~ time + quad,
                               data = .)),
@@ -454,7 +399,7 @@ resultsDF <- tolDF %>%
          Time = 3,
          `Time squared` = 4)
 
-print(xtable(resultsDF, type = "latex"),
+print(xtable(df_results, type = "latex"),
       include.rownames = FALSE)
 @
 
@@ -818,7 +763,7 @@ Use GoF criteria to determine the moment at which you're overfitting the data.
 \begin{center}
     \Huge I hope you enjoyed the workshop!\bigskip
     
-    Let's keep in touch: \textcolor{title}{\href{mailto:manuel.bosancianu@gmail.com}{manuel.bosancianu@gmail.com}}
+    Let's keep in touch: \textcolor{title}{\href{mailto:bosancianu@icloud.com}{bosancianu@icloud.com}}
 \end{center}
 \end{frame}
 

@@ -1,5 +1,5 @@
 % Taken from: https://mikedewar.wordpress.com/2009/02/25/latex-beamer-python-beauty/
-\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169]{beamer}
+\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169,handout]{beamer}
 \usetheme{default}
 \beamertemplatenavigationsymbolsempty
 \definecolor{fore}{RGB}{51,51,51}
@@ -72,7 +72,7 @@ pdfkeywords={Bamberg, workshop, MLM, slides, 2021}}
 \title{Multilevel Modeling: Principles and Applications in \texttt{R}}
 \subtitle{Day 2: Random Slopes}
 \author{Constantin Manuel Bosancianu}
-\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:manuel.bosancianu@gmail.com}{manuel.bosancianu@gmail.com}}
+\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:bosancianu@icloud.com}{bosancianu@icloud.com}}
 \date{January 21, 2021}
 \begin{document}
 \maketitle
@@ -92,18 +92,9 @@ knitr::opts_chunk$set(echo = FALSE,
                       comment = NA,
                       eval = TRUE)
 
-check.packages <- function(pkg){
-  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
-  if (length(new.pkg))
-    install.packages(new.pkg, dependencies = TRUE,
-                     repos = "https://cran.rstudio.com")
-  sapply(pkg, require, character.only = TRUE)
-}
-
-pkgList <- c("tidyverse","scales","texreg","nlme","broom",
-             "arm","kableExtra","broom.mixed","ggeffects",
-             "interplot")
-check.packages(pkgList)
+library(pacman)
+p_load(tidyverse, scales, texreg, nlme, broom, arm, kableExtra,
+       broom.mixed, ggeffects, interplot, ggthemes)
 
 # Define the color scheme for all the plots in the slides
 scale_fill_Pres <- function(...){
@@ -124,12 +115,6 @@ scale_colour_Pres <- function(...){
 
 # Logical switch for generating output
 generateFigs <- FALSE
-
-# Helpful functions
-# Centering - Zoltan Fazekas
-twoSD <- function (x) {
-    (x - mean(x, na.rm = TRUE))/(2 * sd(x, na.rm = TRUE))
-}
 @
 
 Centering in MLMs: why it's done, and how to do it.\bigskip\pause
@@ -411,17 +396,17 @@ Only the highlighted quantities are being estimated in the model.
   \frametitle{Our example---continued}
 
 <<r read-data>>=
-load("../02-data/ISSP.Rdata")
+df_issp <- readRDS("../02-data/01-ISSP.rds")
 @
 
 <<r prepare-data>>=
-ISSPsub <- ISSP %>%
+df_sub <- df_issp %>%
     dplyr::select(poleff, educ, urban, incquart, relatt,
                   female, ti_cpi, mdmh, polRile, country, cnt) %>%
     na.omit()
 
 # Recoding script (also does standardizing)
-ISSPsub <- ISSPsub %>%
+df_sub <- df_sub %>%
     group_by(cnt) %>%
     mutate(educCWC = arm::rescale(educ),
            urbanCWC = arm::rescale(urban),
@@ -453,7 +438,7 @@ ISSPsub <- ISSPsub %>%
     ungroup()
 
 # Continue with standardizing L2 predictors
-ISSPsumm <- ISSPsub %>%
+df_summ <- df_sub %>%
     group_by(cnt) %>%
     summarise(ti_cpi = mean(ti_cpi, na.rm = TRUE),
               polRile = mean(polRile, na.rm = TRUE),
@@ -475,10 +460,10 @@ ISSPsumm <- ISSPsub %>%
     dplyr::select(-c(ti_cpi, polRile, mdmhLow, mdmhMid, mdmhHi))
 
 # Merge centered L2 predictors back into main data frame
-ISSPsub <- left_join(ISSPsub,
-                     ISSPsumm,
-                     by = "cnt")
-rm(ISSPsumm)
+df_sub <- left_join(df_sub,
+                    df_summ,
+                    by = "cnt")
+rm(df_summ)
 @
 
 
@@ -487,7 +472,8 @@ rm(ISSPsumm)
 # work with
 model1 <- lmer(poleff ~ 1 + femaleCWC + educCWC + incCWC + urbanCWC +
                  cpiCGM + (1 | cnt),
-               data = ISSPsub)
+               data = df_sub)
+
 texreg(list(model1),
        digits = 3,
        custom.model.names = c("DV: political efficacy"),
@@ -561,10 +547,10 @@ Not yet explaining \textit{why} the slope of education varies between countries.
   \end{split}
   \end{equation}\pause
 
-  <<r show-random-slopes, eval=generateFigs, echo=TRUE, size = "footnotesize">>=
+<<r show-random-slopes, eval=FALSE, echo=TRUE, size = "footnotesize">>=
 model2 <- lmer(poleff ~ 1 + educCWC + urbanCWC + femaleCWC + incCWC +
-                 cpiCGM + (1 + educCWC| cnt),
-               data=ISSPsub)
+                 cpiCGM + (1 + educCWC | cnt),
+               data = df_sub)
 @
 
 \texttt{lmer()} formula implements extended form of model almost verbatim.
@@ -575,10 +561,10 @@ model2 <- lmer(poleff ~ 1 + educCWC + urbanCWC + femaleCWC + incCWC +
 \begin{frame}[fragile]
   \frametitle{Our example---a random slope (3)}
 
-  <<r run-random-slopes, eval=generateFigs>>=
+<<r run-random-slopes, eval=generateFigs>>=
 model2 <- lmer(poleff ~ 1 + educCWC + urbanCWC + femaleCWC + incCWC +
-                 cpiCGM + (1 + educCWC| cnt),
-               data=ISSPsub)
+                 cpiCGM + (1 + educCWC | cnt),
+               data = df_sub)
 texreg(list(model2),
        digits = 3,
        custom.model.names = c("DV: political efficacy"),
@@ -628,18 +614,18 @@ Var: Residual                & 0.471                   \\
 pdf("../03-graphs/02-01.pdf", height = 5, width = 11)
 ranef(model2) %>%
   augment(ci.level = 0.95) %>%
-  filter(variable=="educCWC") %>%
+  filter(variable == "educCWC") %>%
   ggplot(aes(x = reorder(level, -estimate), y = estimate)) +
-    geom_hline(yintercept = 0, size = 1.25,
-               color = rgb(255, 0, 90, maxColorValue = 255)) +
-    geom_point(size = 3) +
-    geom_errorbar(aes(ymin = lb,
-                      ymax = ub),
-                  width = 0.01,
-                  size = 1.25) +
-    labs(x = "Country",
-         y = "RE for education") +
-    theme_bw() +
+  geom_hline(yintercept = 0, linewidth = 1.25,
+             color = rgb(255, 0, 90, maxColorValue = 255)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lb,
+                    ymax = ub),
+                width = 0.01,
+                linewidth = 1.25) +
+  labs(x = "Country",
+       y = "RE for education") +
+  theme_clean() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
         axis.text.y = element_text(size = 14),
         axis.title.y = element_text(size = 16))
@@ -663,22 +649,22 @@ REs are deviations from the fixed-effect for education, not effects themselves!
 pdf("../03-graphs/02-02.pdf", height = 5, width = 11)
 ranef(model2) %>%
   augment(ci.level = 0.95) %>%
-  filter(variable=="educCWC") %>%
+  filter(variable == "educCWC") %>%
   mutate(estimate = estimate + fixef(model2)["educCWC"]) %>%
   ggplot(aes(x = reorder(level, -estimate), y = estimate)) +
-    geom_hline(yintercept = 0, size = 1.25,
-               color = rgb(255, 0, 90, maxColorValue = 255)) +
-    geom_point(size = 3) +
-    geom_errorbar(aes(ymin = estimate - 1.96*std.error,
-                      ymax = estimate + 1.96*std.error),
-                  width = 0.01,
-                  size = 1.25) +
-    labs(x = "Country",
-         y = "Slopes for education") +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
-          axis.text.y = element_text(size = 14),
-          axis.title.y = element_text(size = 16))
+  geom_hline(yintercept = 0, linewidth = 1.25,
+             color = rgb(255, 0, 90, maxColorValue = 255)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),
+                width = 0.01,
+                linewidth = 1.25) +
+  labs(x = "Country",
+       y = "Slopes for education") +
+  theme_clean() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 16))
 invisible(dev.off())
 @
 
@@ -695,7 +681,7 @@ invisible(dev.off())
   \frametitle{Comparison: no pooling \& MLM with low N}
 
 <<r comparison-prep-data-run-1, eval=generateFigs>>=
-ISSPsub <- ISSP %>%
+df_sub <- df_issp %>%
   dplyr::select(poleff, educ, urban, incquart, relatt,
                 female, country, cnt) %>%
   na.omit()
@@ -704,27 +690,27 @@ ISSPsub <- ISSP %>%
 set.seed(37866)
 
 # Reduce the size of two groups
-ISSPin <- ISSPsub %>%
-  filter(cnt=="IN")
-ISSPde <- ISSPsub %>%
-  filter(cnt=="DE")
-ISSPsub <- ISSPsub %>%
-  filter(!(cnt %in% c("IN","DE")))
+df_in <- df_sub %>%
+  filter(cnt == "IN")
+df_de <- df_sub %>%
+  filter(cnt == "DE")
+df_sub <- df_sub %>%
+  filter(!(cnt %in% c("IN", "DE")))
 
 # Select a random number of cases
-ISSPin <- ISSPin %>%
+df_in <- df_in %>%
   ungroup() %>%
-  sample_n(103)
+  slice_sample(n = 103)
 
-ISSPde <- ISSPde %>%
+df_de <- df_de %>%
   ungroup() %>%
-  sample_n(148)
+  slice_sample(n = 148)
 
-ISSPsub <- rbind(ISSPsub, ISSPin, ISSPde)
-rm(ISSPin, ISSPde)
+df_sub <- rbind(df_sub, df_in, df_de)
+rm(df_in, df_de)
 
 # Recoding script (also does standardizing)
-ISSPsub <- ISSPsub %>%
+df_sub <- df_sub %>%
     group_by(cnt) %>%
     mutate(educCWC = arm::rescale(educ),
            urbanCWC = arm::rescale(urban),
@@ -756,59 +742,59 @@ ISSPsub <- ISSPsub %>%
     ungroup()
 
 # No pooling model
-mod1 <- ISSPsub %>%
+mod1 <- df_sub %>%
   dplyr::select(-country) %>%
   nest(data = -cnt) %>%
   mutate(fit = map(data, ~ lm(poleff ~ femaleCWC + educCWC + incCWC + urbanCWC,
                               data = .)),
          results = map(fit, tidy)) %>%
   unnest(results) %>%
-  filter(term=="educCWC") %>%
+  filter(term == "educCWC") %>%
   dplyr::select(-c(term, statistic, p.value, data, fit)) %>%
   mutate(model = "nopool")
 
 # Multilevel
 model2 <- lmer(poleff ~ 1 + femaleCWC + educCWC + incCWC + urbanCWC +
-                 (1 + educCWC| cnt),
-               data = ISSPsub)
+                 (1 + educCWC | cnt),
+               data = df_sub)
 
 # Complete pooling
 cpoolBeta <- coef(lm(poleff ~ femaleCWC + educCWC + incCWC + urbanCWC,
-                     data = ISSPsub))[3]
+                     data = df_sub))[3]
 
 mod2 <- ranef(model2) %>%
   augment(ci.level = 0.95) %>%
-  filter(variable=="educCWC") %>%
+  filter(variable == "educCWC") %>%
   mutate(estimate = estimate + fixef(model2)["educCWC"]) %>%
   dplyr::select(-c(grp, variable, qq, lb, ub)) %>%
   rename(cnt = level) %>%
   mutate(model = "mlm")
 
-finplotDF <- rbind(mod1, mod2)
+df_finplot <- rbind(mod1, mod2)
 rm(mod1, mod2)
 
 pdf("../03-graphs/02-03.pdf", height = 5, width = 11)
-ggplot(finplotDF %>% arrange(-estimate) %>%
-                   mutate(cnt=factor(cnt, levels=cnt[model=="mlm"])),
+ggplot(df_finplot %>% arrange(-estimate) %>%
+                   mutate(cnt = factor(cnt, levels = cnt[model == "mlm"])),
   aes(x = cnt, y = estimate, group = model, color = model)) +
-  geom_hline(yintercept = cpoolBeta, size = 1.25,
+  geom_hline(yintercept = cpoolBeta, linewidth = 1.25,
              color = rgb(255, 0, 90, maxColorValue = 255)) +
-    geom_point(size = 3,
-               position = position_dodge(width = 0.75)) +
-    geom_errorbar(aes(ymin = estimate - 1.96*std.error,
-                      ymax = estimate + 1.96*std.error),
-                  width = 0.01,
-                  size = 1.25,
-                  position = position_dodge(width = 0.75)) +
-    labs(x = "Country",
-         y = "Slopes for education") +
-    theme_bw() +
+  geom_point(size = 3,
+             position = position_dodge(width = 0.75)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),
+                width = 0.01,
+                linewidth = 1.25,
+                position = position_dodge(width = 0.75)) +
+  labs(x = "Country",
+       y = "Slopes for education") +
+  theme_clean() +
   scale_colour_Pres(name = "Type of model",
                     breaks = c("mlm","nopool"),
                     labels = c("MLM","No pooling")) +
-  geom_hline(yintercept = 0, size = 1.25, linetype = "dashed") +
+  geom_hline(yintercept = 0, linewidth = 1.25, linetype = "dashed") +
   annotate("label", x = "VE", y = 0.50,
-           label = "Red line denotes education slope from complete pooling model") +
+           label = "Red line denotes education slope from complete pooling model") + # nolint
   annotate("label", x = "CH", y = -0.1,
            label = "Dashed line denotes no effect") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
@@ -816,7 +802,7 @@ ggplot(finplotDF %>% arrange(-estimate) %>%
         axis.title.y = element_text(size = 16),
         legend.position = "top")
 invisible(dev.off())
-rm(finplotDF, cpoolBeta, model2, ISSPsub)
+rm(df_finplot, cpoolBeta, model2, df_sub)
 @
 
 \begin{figure}
@@ -863,14 +849,14 @@ A comparison of 3 models:
   \frametitle{Model comparison}
 
 <<r comparison-prep-data-run-2, eval=generateFigs>>=
-ISSPsub <- ISSP %>%
+df_sub <- df_issp %>%
   dplyr::select(poleff, educ, urban, incquart, relatt,
                 female, ti_cpi, mdmh, gini10, country,
                 cnt) %>%
   na.omit()
 
 # Recoding script (also does standardizing)
-ISSPsub <- ISSPsub %>%
+df_sub <- df_sub %>%
     group_by(cnt) %>%
     mutate(educCWC = arm::rescale(educ),
            urbanCWC = arm::rescale(urban),
@@ -902,7 +888,7 @@ ISSPsub <- ISSPsub %>%
     ungroup()
 
 # Continue with standardizing L2 predictors
-ISSPsumm <- ISSPsub %>%
+df_summ <- df_sub %>%
     group_by(cnt) %>%
     summarise(ti_cpi = mean(ti_cpi, na.rm = TRUE),
               mdmh = mean(mdmh, na.rm = TRUE),
@@ -924,31 +910,31 @@ ISSPsumm <- ISSPsub %>%
     dplyr::select(-c(ti_cpi, mdmhLow, mdmhMid, mdmhHi, gini10))
 
 # Merge centered L2 predictors back into main data frame
-ISSPsub <- left_join(ISSPsub,
-                     ISSPsumm,
-                     by = "cnt")
-rm(ISSPsumm)
+df_sub <- left_join(df_sub,
+                    df_summ,
+                    by = "cnt")
+rm(df_summ)
 
 model1 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
                  urbanCWC + cpiCGM + (1 | cnt),
-               data = ISSPsub)
+               data = df_sub)
 
 model2 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + (1 + educCWC| cnt),
-               data = ISSPsub)
+                 urbanCWC + cpiCGM + (1 + educCWC | cnt),
+               data = df_sub)
 
 model3 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + educCWC*cpiCGM +
-                 (1 + educCWC| cnt),
-               data = ISSPsub)
+                 urbanCWC + cpiCGM + educCWC * cpiCGM +
+                 (1 + educCWC | cnt),
+               data = df_sub)
 
 texreg(list(model1, model2, model3),
        digits = 3,
-       custom.model.names = c("RI","RI + RS no pred.", "RI + RS & pred."),
-       custom.coef.names = c("(Intercept)","Female","Education","Income: 2nd quartile",
-                             "Income: 3rd quartile", "Income: 4th quartile",
-                             "Urban residence", "Perceptions of corruption",
-                             "Education * Perceptions"),
+       custom.model.names = c("RI", "RI + RS no pred.", "RI + RS & pred."),
+       custom.coef.names = c("(Intercept)", "Female", "Education",
+                             "Income: 2nd quartile", "Income: 3rd quartile",
+                             "Income: 4th quartile", "Urban residence",
+                             "Perceptions of corruption", "Education * Perceptions"), # nolint
        omit.coef = "(inc)|(female)|(urban)",
        booktabs = TRUE,
        dcolumn = TRUE)
@@ -1011,22 +997,22 @@ How many parameters are estimated in each model?\only<3->{\footnote{If \texttt{G
 
 <<r slopes-extension-more-preds, eval=generateFigs>>=
 model4 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM +
-                 (1 + educCWC| cnt),
-               data = ISSPsub)
+                 urbanCWC + cpiCGM + educCWC * cpiCGM + giniCGM +
+                 (1 + educCWC | cnt),
+               data = df_sub)
 model5 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM + educCWC*giniCGM +
-                 (1 + educCWC| cnt),
-               data = ISSPsub)
+                 urbanCWC + cpiCGM + educCWC * cpiCGM + giniCGM +
+                 educCWC * giniCGM + (1 + educCWC | cnt),
+               data = df_sub)
 
 texreg(list(model4, model5),
        digits = 3,
-       custom.model.names = c("M1","M2"),
-       custom.coef.names = c("(Intercept)","Female","Education",
-                             "Income: 2nd quantile","Income: 3rd quantile",
-                             "Income: 4th quantile","Urban residence",
-                             "Perceptions of corruption","Gini (10-point)",
-                             "Education * Perceptions","Education * Gini"),
+       custom.model.names = c("M1", "M2"),
+       custom.coef.names = c("(Intercept)", "Female", "Education",
+                             "Income: 2nd quantile", "Income: 3rd quantile",
+                             "Income: 4th quantile", "Urban residence",
+                             "Perceptions of corruption", "Gini (10-point)",
+                             "Education * Perceptions", "Education * Gini"),
        single.row = TRUE,
        booktabs = TRUE,
        dcolumn = TRUE,
@@ -1093,11 +1079,11 @@ graph1 <- interplot(model5,
                     ci = 0.95)
 pdf("../03-graphs/02-04.pdf", height = 5, width = 9)
 graph1 +
-  theme_bw() +
+  theme_clean() +
   labs(x = "Gini (centered CGM)",
        y = "Effect of education on\n political efficacy") +
   geom_hline(yintercept = 0, linetype = "dashed",
-             size = 1.25, color = rgb(255, 0, 90, maxColorValue = 255)) +
+             linewidth = 1.25, color = rgb(255, 0, 90, maxColorValue = 255)) +
   theme(axis.text.x = element_text(size = 14),
         axis.text.y = element_text(size = 14),
         axis.title = element_text(size = 16))
@@ -1125,11 +1111,11 @@ graph1 <- interplot(model5,
                     ci = 0.95)
 pdf("../03-graphs/02-05.pdf", height = 5, width = 9)
 graph1 +
-  theme_bw() +
+  theme_clean() +
   labs(x = "Education (centered CWC)",
        y = "Effect of Gini on\n political efficacy") +
   geom_hline(yintercept = 0, linetype = "dashed",
-             size = 1.25, color = rgb(255, 0, 90, maxColorValue = 255)) +
+             linewidth = 1.25, color = rgb(255, 0, 90, maxColorValue = 255)) +
   theme(axis.text.x = element_text(size = 14),
         axis.text.y = element_text(size = 14),
         axis.title = element_text(size = 16))
@@ -1160,6 +1146,7 @@ plot(dat1,
      show.title = FALSE,
      show.x.title = FALSE,
      show.y.title = FALSE) +
+  theme_clean() +
   scale_x_continuous(name = "Education (CWC)") +
   scale_y_continuous(name = "Political efficacy") +
   theme(axis.text.x = element_text(size = 14),
@@ -1188,12 +1175,14 @@ dat1 <- ggpredict(model5,
                   terms = c("educCWC", "giniCGM [-0.4, 0, 0.6]"),
                   ci.lvl = 0.95,
                   type = "re")
+
 pdf("../03-graphs/02-07.pdf", height = 5, width = 13)
 plot(dat1,
      facet = TRUE,
      show.title = FALSE,
      show.x.title = FALSE,
      show.y.title = FALSE) +
+  theme_clean() +
   scale_x_continuous(name = "Education (CWC)") +
   scale_y_continuous(name = "Political efficacy") +
   theme(axis.text.x = element_text(size = 14),
@@ -1473,14 +1462,14 @@ I compare a few specifications we saw today:
 \end{itemize}\pause
 
 <<r lrt-prep-data, eval=generateFigs>>=
-ISSPsub <- ISSP %>%
+df_sub <- df_issp %>%
     dplyr::select(poleff, educ, urban, incquart, relatt,
                   female, ti_cpi, mdmh, gini10, enep,
                   polRile, country, cnt) %>%
     na.omit()
 
 # Recoding script (also does standardizing)
-ISSPsub <- ISSPsub %>%
+df_sub <- df_sub %>%
     group_by(cnt) %>%
     mutate(educCWC = arm::rescale(educ),
            urbanCWC = arm::rescale(urban),
@@ -1512,7 +1501,7 @@ ISSPsub <- ISSPsub %>%
     ungroup()
 
 # Continue with standardizing L2 predictors
-ISSPsumm <- ISSPsub %>%
+df_summ <- df_sub %>%
     group_by(cnt) %>%
     summarise(ti_cpi = mean(ti_cpi, na.rm = TRUE),
               mdmh = mean(mdmh, na.rm = TRUE),
@@ -1536,28 +1525,28 @@ ISSPsumm <- ISSPsub %>%
     dplyr::select(-c(ti_cpi, mdmhLow, mdmhMid, mdmhHi, gini10, enep))
 
 # Merge centered L2 predictors back into main data frame
-ISSPsub <- left_join(ISSPsub,
-                     ISSPsumm,
-                     by = "cnt")
-rm(ISSPsumm)
+df_sub <- left_join(df_sub,
+                    df_summ,
+                    by = "cnt")
+rm(df_summ)
 @
 
 <<r lrt-run-models, eval=generateFigs>>=
 model2 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
                  urbanCWC + cpiCGM + (1 + educCWC| cnt),
-               data = ISSPsub)
+               data = df_sub)
 model3 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + educCWC*cpiCGM +
+                 urbanCWC + cpiCGM + educCWC * cpiCGM +
                  (1 + educCWC| cnt),
-               data = ISSPsub)
+               data = df_sub)
 model4 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM +
+                 urbanCWC + cpiCGM + educCWC * cpiCGM + giniCGM +
                  (1 + educCWC| cnt),
-               data = ISSPsub)
+               data = df_sub)
 model5 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
-                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM + educCWC*giniCGM +
+                 urbanCWC + cpiCGM + educCWC * cpiCGM + giniCGM + educCWC * giniCGM + # nolint
                  (1 + educCWC| cnt),
-               data = ISSPsub)
+               data = df_sub)
 @
 
 Because by default these models were estimated with REML, they will have to be re-estimated with FIML first.
@@ -1628,7 +1617,7 @@ You'll want to add some more group-level data to it (e.g. income inequality, une
   \frametitle{Data management (1)}
 Merging will be done with the \texttt{join} family of function from \texttt{dplyr}.\bigskip
 
-<<r data-manage-1, eval=generateFigs, echo=TRUE>>=
+<<r data-manage-1, eval=FALSE, echo=TRUE>>=
 merged_data <- left_join(l1data, l2data, by = "ID_var")
 @
 \pause
