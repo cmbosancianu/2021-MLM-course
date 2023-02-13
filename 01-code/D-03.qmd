@@ -1,0 +1,582 @@
+---
+title: "Day 3 code"
+author:
+  name: "Constantin Manuel Bosancianu"
+  orcid: 0000-0001-7950-9798
+  email: bosancianu@icloud.com
+date: "January 22, 2021"
+bibliography: "../04-slides/Bibliography.bib"
+execute:
+  eval: true
+  echo: true
+  warning: false
+  error: false
+format:
+  html:
+    toc: true
+    code-fold: true
+    toc-location: left
+    theme: minty
+    number-sections: true
+    reference-location: margin
+    embed-resources: true
+---
+
+# Introduction
+
+We start in the same way as yesterday - by loading needed packages, and reading in the data.
+
+```{r load-packages}
+library(pacman)
+p_load(tidyverse, broom, ggeffects, texreg, arm,
+       broom.mixed, ggthemes, nlme, HLMdiag, knitr)
+```
+
+We will work on two data sources today, each with its own characteristics.
+
+# Sleep study
+
+The first data set comes from a sleep study by @belenky_patterns_2003. A number of 66 volunteers were subjected to sleep deprivation in varying doses over 10 days. In our analyses here we concentrate on the 18 subjects who slept only 3 hours per night for 7 days. All subjects were allowed a period of recovery of 3 days of normal sleep (8 hours a night) following the 7 days.
+
+Throughout the 10 days ($7 \times 3$ hours per night, $3 \times 8$ hours per night) their reaction times were tested on a psychomotor vigilance test (a visual stimulus would be displayed and the subject's reaction time to it was measured).
+
+The data is already made available in the `lme4` package, so all we need to do it load it from there.
+
+```{r read-data-1}
+data("sleepstudy")
+
+sleepstudy %>%
+    glimpse()
+```
+
+We'll only use this data for basic graphical examinations, and to test very simple "unconditional means" and "unconditional growth" models. Little more is possible, as there are no predictors to be found in the data.
+
+The great benefit of working with smaller data sets is that we can rely more on graphical tools - these are vital in the context of longitudinal modeling in helping us understand the trajectories of change. The fact that the sleep study data only has 18 respondents is a big advantage in allowing us to keep the plots manageable in size.
+
+Start with a *lowess* fit, to let the data speak for itself.
+
+```{r lowess-fit}
+#| fig-height: 6
+#| fig-width: 9
+#| dpi: 144
+
+ggplot(data = sleepstudy,
+       aes(x = Days,
+           y = Reaction)) +
+  theme_clean() +
+  geom_point(size = 3) +
+  geom_smooth(method = "loess",
+              linewidth = 1.25,
+              color = "orange",
+              se = FALSE) +
+  facet_wrap(. ~ Subject, ncol = 6) +
+  labs(x = "Days",
+       y = "Reaction time in PVT") +
+  scale_x_continuous(breaks = c(0, 1, 2, 3, 4,
+                                5, 6, 7, 8, 9),
+                     labels = c("0", "1", "2",
+                                "3", "4", "5",
+                                "6", "7", "8", "9"))
+```
+
+Try a linear fit as well, that imposes much more structure on the data.
+
+```{r linear-fit-1}
+#| fig-height: 6
+#| fig-width: 9
+#| dpi: 144
+
+ggplot(data = sleepstudy,
+       aes(x = Days,
+           y = Reaction)) +
+    theme_clean() +
+    geom_point(size = 2.5) +
+    geom_smooth(method = "lm",
+                size = 1.5,
+                color = "orange",
+                se = FALSE) +
+    facet_wrap(.~Subject, ncol = 6) +
+    labs(x = "Days",
+         y = "Reaction time in PVT") +
+    scale_x_continuous(breaks = c(0, 1, 2, 3, 4,
+                                  5, 6, 7, 8, 9),
+                       labels = c("0", "1", "2",
+                                  "3", "4", "5",
+                                  "6", "7", "8", "9"))
+```
+
+**Quick task**: Can you use a snipped of code I was using when plotting varying slopes, and display on each panel the average response time in the entire cohort of 18 subjects? (a horizontal line, that could be dashed, or have a specific color to distinguish it)^[If you want to look at one possible solution, activate the code chunk below.]
+
+```{r linear-fit-2, eval=FALSE}
+ggplot(data = sleepstudy,
+       aes(x = Days,
+           y = Reaction)) +
+  theme_clean() +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm",
+              size = 1.5,
+              color = "orange",
+              se = FALSE) +
+  geom_hline(yintercept = mean(sleepstudy$Reaction),
+             linewidth = 1.25,
+             color = "blue") +
+  facet_wrap(. ~ Subject, ncol = 6) +
+  labs(x = "Days",
+       y = "Reaction time in PVT")
+```
+
+We can create a similar plot, but plotting the average response time in the cohort *by day*.^[As before, if you want to see a possible solution, activate the code chunk below.]
+
+```{r linear-fit-3, eval=FALSE}
+sleepstudy <- sleepstudy %>%
+  group_by(Days) %>%
+  mutate(ave_resp = mean(Reaction, na.rm = TRUE))
+
+ggplot(data = sleepstudy,
+       aes(x = Days,
+           y = Reaction)) +
+  theme_clean() +
+  geom_point(size = 2.5) +
+  geom_point(aes(x = Days,
+                 y = ave_resp),
+             color = "blue",
+             size = 1.5) +
+  geom_smooth(method = "lm",
+              size = 1.5,
+              color = "orange",
+              se = FALSE) +
+  facet_wrap(.~Subject, ncol = 6) +
+  labs(x = "Days",
+       y = "Reaction time in PVT")
+```
+
+## Unconditional means specification
+
+Visually, we can tell there's a lot of variation across the 10 days of the experiment. Can we also get a measure of how much within-individual variation exists, as a share of total variation?
+
+For this, we need the **unconditional means** specification. I continue the estimation as we did so far, in the `lme4` package, though this will only get us this far today.
+
+```{r unconditional-means-1}
+mlm.0 <- lmer(Reaction ~ 1 + (1 | Subject),
+              data = sleepstudy)
+summary(mlm.0)
+```
+
+We can also compute an ICC based on this model.
+
+```{r icc-1}
+1278/(1278 + 1959)
+```
+
+How do you interpret the ICC in the context of a longitudinal growth model?
+
+## Unconditional growth specification
+
+Let's move to the **unconditional growth** model. This is going to formalize what the first plot told us: (1) how do the initial score and rate of change in the response time change for individuals, but also (2) what the average baseline score and rate of change is in the sample.
+
+```{r unconditional-growth-1}
+mlm.1 <- lmer(Reaction ~ 1 + Days + (1 + Days | Subject),
+              data = sleepstudy)
+summary(mlm.1)
+```
+
+A few questions about these results:
+
+1. What is the average baseline response time in the sample on the first day of the experiment?
+2. What's the average rate of change in this response time for the sample?
+
+**Quick task**: Can you plot how the estimated rate of growth varies for each individual in the sample?^[Use the code I used in the past few days to plot varying slopes between countries.]
+
+
+## Examining residuals
+
+How do the residuals look in this model? The function `hlm_resid()` extracts the residuals and predicted values from the model, and appends them to the model data frame.
+
+```{r examine-assumptions-1}
+mlm.1.res <- hlm_resid(mlm.1,
+                       level = 1)
+```
+
+```{r plot-residuals-1}
+#| fig-height: 6
+#| fig-width: 9
+#| dpi: 144
+
+ggplot(data = mlm.1.res,
+       aes(x = Days,
+           y = .resid)) +
+    theme_clean() +
+    geom_point(size = 3) +
+    geom_hline(yintercept = 0,
+               color = "blue",
+               linewidth = 1.25,
+               alpha = 0.35) +
+    facet_wrap(.~Subject, ncol = 6) +
+    labs(x = "Days",
+         y = "Residual from unconditional growth model")
+rm(mlm.1.res)
+```
+
+The errors seem to exhibit a AR pattern to them. Sadly, we can't do much about it in `lme4`, as the ability to specify a custom variance-covariance structure for the L1 errors is not really available. The current principal developer on the package, Ben Bolker, walks through a few of the workarounds here ([https://bbolker.github.io/mixedmodels-misc/notes/corr_braindump.html](https://bbolker.github.io/mixedmodels-misc/notes/corr_braindump.html)), but I can't say either option from there is truly satisfactory for us.
+
+## Re-estimating model
+
+This is why we need to turn to the `nlme` package. Though not as frequently maintained as in the past, `nlme` is still more flexible than `lme4` when it comes to the modeling options it allows for.
+
+Compared to `lme4` the syntax is a bit different, but not by much.
+
+```{r unconditional-growth-2}
+mlm.1 <- lme(fixed = Reaction ~ 1 + Days,
+             random = ~ 1 + Days | Subject,
+             data = sleepstudy,
+             method = "REML")
+summary(mlm.1)
+```
+
+Notice how the random effects are reported. What are the similarities and what are the differences compared to `lmer()`?
+
+In this new package, on which we will rely for the rest of today's session, we can even specify the form of the variance-covariance matrix for the residuals.
+
+```{r unconditional-growth-3}
+mlm.2 <- lme(fixed = Reaction ~ 1 + Days,
+             random = ~ 1 | Subject,
+             data = sleepstudy,
+             method = "REML",
+             correlation = corAR1(form = ~ 1 | Subject))
+summary(mlm.2)
+```
+
+```{r check-fit}
+anova(mlm.1, mlm.2)
+rm(mlm.1, mlm.2, sleepstudy)
+```
+
+The model with the correlation structure specified clearly fits the data better.
+
+# Employment outcomes study
+
+The data comes from the National Longitudinal Study of Youth in the US, and tracks the employment outcomes of male high-school dropouts in the 1990s. It has the kind of structure that is frequently encountered in practice: irregular spacing between measurement rounds, and measurements performed at irregular dates within a wave.
+
+```{r read-data-2}
+link <- "https://stats.idre.ucla.edu/stat/r/examples/alda/data/wages_pp.txt"
+df_wages <- read.table(file = link,
+                       header = TRUE,
+                       sep = ",")
+
+df_wages %>%
+    glimpse()
+```
+
+Data structure:
+
+1. `id`: person ID
+2. `lnw`: natural log of wages, in constant 1990 USD ($log_e(wages)$)
+3. `exper`: years in labor force to nearest day
+4. `ged`: indicator (1 = attained GED; 0 otherwise) (the GED is a test that checks whether a person has skills at the level of a high-school graduate in the US or Canada - it can replace a high-school degree from these countries)
+5. `postexp`: years in labor force from day of GED attainment
+6. `black`: racial background (1 = black; 0 = otherwise)
+7. `hispanic`: hispanic indicator (1 = hispanic; 0 = otherwise)
+8. `hgc`: highest grade completed
+9. `hgc.9`: highest grade completed, centered on grade 9
+10. `uerate`: unemployment rate in the local geographical area
+11. `ue.7`: unemployment rate, centered on 7%
+12. `ue.centert1`: unemployment rate, centered around the unemployment value at $t_1$
+13. `ue.mean`: within-person mean of unemployment rate
+14. `ue.person.cen`: unemployment rate, within-person centering
+15. `ue.1`: unemployment rate at $t_1$
+
+```{r group-sizes, results='asis'}
+df_agg <- df_wages %>%
+     group_by(id) %>%
+     summarise(N = n())
+
+table(df_agg$N) %>%
+    as.data.frame() %>%
+    kable(caption = "Number of observations by individual",
+          caption.above = TRUE,
+          col.names = c("Times measured", "N individuals"),
+          row.names = FALSE)
+rm(df_agg)
+```
+
+Individual measurement occasions vary between IDs. Some individuals are reached for more than 8 or 9 times, whereas a few are reached 3 times or fewer.
+
+**Quick task**: Select from the data set a random sample of 48 individuals, and plot their observations in a panel grid of 6 rows and 8 columns. Put `exper` on the X axis, and `lnw` on the Y axis. For each panel, fit a linear fit line, so as to examine the trend in wages over time.^[If you'd like to see a potential solution to this, activate the code chunk below.]
+
+```{r solution-plot-1, eval=FALSE}
+vectorIDs <- unique(df_wages$id)
+set.seed(8476385)
+neededIDs <- sample(vectorIDs, size = 48)
+
+ggplot(data = filter(df_wages, id %in% neededIDs),
+       aes(x = exper,
+           y = lnw)) +
+  theme_clean() +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm",
+              size = 1.5,
+              color = "orange",s
+              se = FALSE) +
+  facet_wrap(.~id, ncol = 8) +
+  labs(x = "Labor market experience",
+       y = "Natural logarithm of wages")
+```
+
+
+## Unconditional growth
+
+We can start the modeling from the unconditional growth model. In this specification, `exper` plays the role of **TIME** indicator.
+
+```{r unconditional-growth-4}
+mlm.1 <- lme(fixed = lnw ~ 1 + exper,
+             random = ~ 1 + exper | id,
+             data = df_wages,
+             method = "REML")
+summary(mlm.1)
+```
+
+Compared to the previous example, though, we now have an individual-level, time-invariant predictor: a person's racial background. For racial background it's relatively easy, but if we had another variable, how could we tell at which lever it is measured on? Well, there are many ways to do this, but a simple one is to check whether within an individual there is any variation in the variable, over time. If there isn't, it's a good bet that the variable is time invariant.
+
+```{r check-data-level-1, results='asis'}
+df_wages %>%
+    group_by(id) %>%
+    summarise(black_sd = sd(black, na.rm = TRUE)) %>%
+    slice(1:20) %>%
+    kable(digits = 3,
+          col.names = c("ID", "SD(black)"),
+          caption = "SD of racial background for 20 individuals",
+          caption.above = TRUE)
+```
+
+**Question**: What is another way in which you can check if a variable truly is measured at the L2 or not?
+
+Because of the way it is included in the model, our specification posits that racial background is a predictor for the random intercept.
+
+```{r unconditional-growth-5}
+df_wages <- df_wages %>%
+    mutate(black = as.character(black))
+
+mlm.2 <- lme(fixed = lnw ~ 1 + exper + black,
+             random = ~ 1 + exper | id,
+             data = df_wages,
+             method = "REML")
+summary(mlm.2)
+```
+
+```{r model-fit-2}
+anova(mlm.1, mlm.2)
+```
+
+Uh-oh. Unfortunately, for output objects produced by the `lme()` function, `anova()` doesn't re-estimate them automatically with **FIML**, so we have to do it.
+
+```{r model-fit-3}
+mlm.1.fiml <- update(mlm.1, method = "ML")
+mlm.2.fiml <- update(mlm.2, method = "ML")
+
+anova(mlm.1.fiml, mlm.2.fiml)
+rm(mlm.1.fiml)
+```
+
+
+## Expanding model
+
+```{r mlm-growth-6}
+mlm.3 <- lme(fixed = lnw ~ 1 + exper + black + black * exper,
+             random = ~ 1 + exper | id,
+             data = df_wages,
+             method = "ML")
+summary(mlm.3)
+```
+
+```{r model-fit-4}
+mlm.3.fiml <- update(mlm.3, method = "ML")
+anova(mlm.2.fiml, mlm.3.fiml)
+rm(mlm.2.fiml)
+```
+
+This last specification looks a lot like types of models that we tried in the last week in course. How would you interpret, in the context of a longitudinal model:
+
+1. the effect of `exper`?
+2. the effect of `black`?
+3. the effect of the cross-level interaction?
+
+## Presenting results
+
+Though we could, of course, present a nicely-formatted table of results from this specification, it's far more helpful for an audience to visualize the effects we're talking about. This is where the `ggpredict()` function can help us out, since we can plot trajectories of change and effects for specific sub-groups in the sample.
+
+Plotting the predicted trajectories of a typical Black and non-Black person after entering the job market. Remember our discussion from yesterday, about sources of uncertainty when designing plots of predicted values. This function visibly only incorporates the sampling uncertainty that comes from the fixed effects.
+
+```{r effect-plot-1}
+#| fig-height: 5
+#| fig-width: 7
+#| dpi: 144
+
+dat1 <- ggpredict(mlm.3,
+                  terms = c("exper", "black [0, 1]"),
+                  ci.lvl = 0.95,
+                  type = "fe")
+
+plot(dat1,
+     show.title = FALSE,
+     show.x.title = FALSE,
+     show.y.title = FALSE) +
+  scale_color_discrete(name = "Race",
+                       breaks = c("0","1"),
+                       labels = c("Not black","Black")) +
+  scale_x_continuous(name = "Labor-market experience") +
+  scale_y_continuous(name = "Logarithm of hourly wages") +
+  theme_clean()
+rm(dat1)
+```
+
+You can also switch the logic around, and plot how African-Americans and their peers are doing in terms of hourly wages at different levels of labor market experience.
+
+```{r effect-plot-2}
+#| fig-height: 5
+#| fig-width: 7
+#| dpi: 144
+
+dat2 <- ggpredict(mlm.3,
+                  terms = c("black", "exper [0.2, 3.4, 11.5]"),
+                  ci.lvl = 0.95,
+                  type = "fe")
+
+plot(dat2,
+     show.title = FALSE,
+     show.x.title = FALSE,
+     show.y.title = FALSE,
+     dodge = NULL,
+     ci.style = "errorbar") +
+  scale_color_discrete(name = "Labor market experience",
+                       breaks = c(0.2,3.4,11.5),
+                       labels = c("Low","Average","High")) +
+  scale_x_continuous(name = "Race",
+                     breaks = c(0,1),
+                     labels = c("Not black","Black")) +
+  scale_y_continuous(name = "Logarithm of hourly wages") +
+  theme_clean() +
+  theme(legend.position = "bottom")
+```
+
+Try as I might, I couldn't get rid of this warning, and even though it doesn't seem to impact the graph design, it is annoying. So I decided to try again, this time extracting the needed quantities by hand from the `dat2` object.
+
+```{r effect-plot-3}
+#| fig-height: 5
+#| fig-width: 7
+#| dpi: 144
+
+ggplot(dat2,
+       aes(x = x,
+           y = predicted,
+           color = group,
+           group = group)) +
+  geom_point(size = 3) +
+  geom_line() +
+  geom_errorbar(aes(ymin = conf.low,
+                    ymax = conf.high,
+                    color = group),
+                width = 0.01) +
+  theme_clean() +
+  scale_color_discrete(name = "Labor market experience",
+                       breaks = c(0.2,3.4,11.5),
+                       labels = c("Low","Average","High")) +
+  scale_x_discrete(name = "Race",
+                   breaks = c("0","1"),
+                   labels = c("Not black","Black")) +
+  scale_y_continuous(name = "Logarithm of hourly wages") +
+  theme(legend.position = "bottom")
+```
+
+
+## Expanding model again
+
+We can improve on the specification above by adding another factor: unemployment in the local geographic area, centered around the value of 7%.
+
+```{r mlm-growth-7}
+mlm.4 <- lme(fixed = lnw ~ 1 + exper + black + black * exper +
+                 ue.7,
+             random = ~ 1 + exper | id,
+             data = df_wages,
+             method = "ML")
+summary(mlm.4)
+```
+
+# Discontinuous change
+
+Does getting a GED impact one's salary?
+
+Let's first take a look at the variable that records getting a GED degree (though we wouldn't really need to).
+
+```{r plot-change}
+#| fig-height: 6
+#| fig-width: 9
+#| dpi: 144
+
+idVEC <- c(1405, 1931, 12143, 134, 241, 316, 411, 3272, 3751)
+
+df_wages %>%
+  filter(id %in% idVEC) %>%
+  mutate(ged = as.character(ged)) %>%
+  ggplot(aes(x = exper,
+             y = ged)) +
+  geom_point(size = 2) +
+  geom_line() +
+  theme_clean() +
+  facet_wrap(~id, ncol = 3) +
+  labs(x = "Labor-market experience",
+       y = "GED")
+```
+
+It takes values of "0" before getting a GED, and "1" after (which is logical).
+
+```{r mlm-growth-8}
+mlm.5 <- lme(fixed = lnw ~ 1 + exper + black + black * exper +
+                 ue.7 + ged,
+             random = ~ 1 + exper | id,
+             data = df_wages,
+             method = "REML")
+summary(mlm.5)
+```
+
+Check whether the effect of experience on wages also changes after obtaining the GED.
+
+```{r mlm-growth-9}
+mlm.6 <- lme(fixed = lnw ~ 1 + exper + black + black * exper +
+                 ue.7 + ged + postexp,
+             random = ~ 1 + exper | id,
+             data = df_wages,
+             method = "REML")
+summary(mlm.6)
+```
+
+How do you interpret the (lack of) effect on the `postexp` indicator? Keep in mind how this variable is constructed.
+
+```{r effect-plot-4}
+#| fig-height: 5
+#| fig-width: 7
+#| dpi: 144
+
+dat2 <- ggpredict(mlm.5,
+                  terms = c("exper", "ged [0, 1]"),
+                  ci.lvl = 0.95,
+                  type = "fe")
+plot(dat2,
+     show.title = FALSE,
+     show.x.title = FALSE,
+     show.y.title = FALSE) +
+  scale_color_discrete(name = "GED",
+                       breaks = c(0, 1),
+                       labels = c("No", "Yes")) +
+  scale_x_continuous(name = "Labor-market experience") +
+  scale_y_continuous(name = "Logarithm of hourly wages") +
+  theme_clean()
+```
+
+
+# Package versions
+
+Package versions used in this script.^[Useful when trying to replicate the analyses above.]
+
+```{r package-versions}
+sessionInfo()
+```

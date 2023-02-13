@@ -1,0 +1,1557 @@
+% Taken from: https://mikedewar.wordpress.com/2009/02/25/latex-beamer-python-beauty/
+\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169,handout]{beamer}
+\usetheme{default}
+\beamertemplatenavigationsymbolsempty
+\definecolor{fore}{RGB}{51,51,51}
+\definecolor{back}{RGB}{255,255,255}
+\definecolor{title}{RGB}{255,0,90}
+\setbeamercolor{titlelike}{fg=title}
+\setbeamercolor{normal text}{fg=fore,bg=back}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{mathpazo}
+\usepackage{inputenc}
+\usepackage{parskip}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\usepackage{hyperref}
+\hypersetup{pdfauthor={Constantin Manuel Bosancianu},
+pdftitle={Multilevel Modeling},
+pdfsubject={Day 1: The Basics},
+pdfkeywords={Bamberg, workshop, MLM, slides, 2021}}
+\usepackage{babel}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.10}
+\usepgfplotslibrary{fillbetween}
+% Defines a checkmark
+\def\checkmark{\tikz\fill[scale=0.4,color=title](0,.35) -- (.25,0) -- (1,.7) -- (.25,.15) -- cycle;}
+\setbeamertemplate{itemize items}{\checkmark}
+% For table captions in Beamer
+\usepackage{caption}
+\captionsetup[figure]{labelfont={color=title}, labelformat=empty}
+\captionsetup[table]{labelfont={color=title}, labelformat=empty}
+% Color of enumerate items
+\setbeamercolor{enumerate item}{fg=title}
+\usepackage{tikz, tikz-cd, animate}
+\usetikzlibrary{shapes,backgrounds,trees}
+\usetikzlibrary{decorations.pathreplacing}
+\usepackage{pgfplotstable}
+\usepackage{wrapfig}
+\usepackage{booktabs}
+\usepackage{dcolumn}
+\usepackage[sectionbib]{apacite}
+\renewcommand{\bibliographytypesize}{\footnotesize}
+% Set the design of the footer
+\makeatletter
+\setbeamertemplate{title page}[default][left]
+\@addtoreset{subfigure}{figure}
+\setbeamercolor{author in head/foot}{fg=white, bg=fore}
+\setbeamercolor{date in head/foot}{fg=white, bg=fore}
+\setbeamercolor{institute in head/foot}{fg=white, bg=fore}
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot}\insertauthor
+  \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,center]{institute in head/foot}%
+    \usebeamerfont{institute in head/foot}Bamberg
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+    \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+    \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+\makeatother
+\title{Multilevel Modeling: Principles and Applications in \texttt{R}}
+\subtitle{Day 1: The Basics}
+\author{Constantin Manuel Bosancianu}
+\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:bosancianu@icloud.com}{bosancianu@icloud.com}}
+\date{January 20, 2021}
+\begin{document}
+\maketitle
+
+% PREAMBLE %
+\section{Preamble}
+\begin{frame}
+
+<<r setup, include = FALSE, warning=FALSE, message=FALSE, comment=NA, results='hide'>>=
+# Setup chunk
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      comment = NA,
+                      eval = TRUE)
+
+library(pacman)
+p_load(tidyverse, scales, texreg, nlme, broom, arm,
+       kableExtra)
+
+# Define the color scheme for all the plots in the slides
+scale_fill_Pres <- function(...){
+  library(scales)
+  discrete_scale("fill","Publication",
+                 manual_pal(values = c("#386cb0","#fdb462","#7fc97f",
+                                       "#ef3b2c","#662506","#a6cee3",
+                                       "#fb9a99","#984ea3","#ffff33")), ...)
+}
+
+scale_colour_Pres <- function(...){
+  library(scales)
+  discrete_scale("colour","Publication",
+                 manual_pal(values = c("#386cb0","#fdb462","#7fc97f",
+                                       "#ef3b2c","#662506","#a6cee3",
+                                       "#fb9a99","#984ea3","#ffff33")), ...)
+}
+
+# Logical switch for generating output
+generateFigs <- FALSE
+@
+
+\begin{center}
+    \Huge \textcolor{title}{Welcome}! It's great to have you in the workshop!
+\end{center}
+
+\end{frame}
+
+
+% FRAME
+\begin{frame}
+  \frametitle{Workshop structure (1)}
+
+First two days showcase fundamental features of multilevel models (MLMs):
+
+\begin{enumerate}
+  \item Ability to model (explain) variation in data at multiple levels \pause
+  \item Ability to explain variation between groups in \textit{estimates} \pause
+  \item Ability to estimate effects for groups not encountered in our data
+\end{enumerate}\bigskip
+
+\pause
+
+We go through: (1) estimation; (2) interpretation; (3) model assessment and checking; and (4) graphical display of quantities of interest and predictions based on the models.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Workshop structure (2)}
+
+The last day applies these lessons to a specific data configuration: longitudinal data.\bigskip
+\pause
+
+Multiple observations over time for a large set of units ($N \gg T$).\bigskip
+\pause
+
+Most of the lessons from the previous two days hold for MLMs applied to longitudinal data, so we focus on key differences.
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Logistics}
+Lecture based on \textcolor{title}{.pdf} and pre-recorded video. Labs based on \textcolor{title}{.Rdata} \& \textcolor{title}{.R}, and carried out "live" (via Zoom).\bigskip
+\pause
+
+Over the 3 workshop days, time spent on lectures gradually decreases in favor of labs:
+
+\begin{itemize}
+\item D1: $\approx$ 100 min lecture \& 100 min lab
+\item D2: $\approx$ 80 min lecture \& 120 min lab
+\item D3: $\approx$ 60 min lecture \& 140 min lab
+\end{itemize}\bigskip
+\pause
+
+Small part of the lab also devoted to questions about readings or video lectures.
+
+\end{frame}
+
+
+
+\section{Introduction}
+\begin{frame}
+\begin{center}
+    \Huge Why MLM?
+\end{center}
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Value of MLM}
+
+MLMs are uniquely suited to capturing one type of social complexity: the way individuals/firms/NGOs act or think may be context-dependent.\bigskip
+\pause
+
+An example which I focus on are the cross-country differences in the likelihood that lower-income people participate in politics.\bigskip
+\pause
+
+Many similar examples related to educational research, e.g. differences between schools in how much progress students make over a 4-year cycle.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{M\"{u}ller-Lyer illusion}
+Which one is longer?\bigskip
+
+\begin{figure}
+\centering
+\begin{subfigure}[c]{.45\textwidth}
+\begin{tikzpicture}
+\node[draw=none,inner sep=0pt,minimum size=1pt] (D) at (1,0) {};
+\node[draw=none,inner sep=0pt,minimum size=1pt] (E) at (5,0) {};
+\draw[-,very thick,color=title] (D)--(E);
+\node[draw=none] (C5) at (2,0.75) {};
+\node[draw=none] (C6) at (2,-0.75) {};
+\draw[-,very thick,color=fore] (C5)--(D);
+\draw[-,very thick,color=fore] (C6)--(D);
+\node[draw=none] (C7) at (4,0.75) {};
+\node[draw=none] (C8) at (4,-0.75) {};
+\draw[-,very thick,color=fore] (E)--(C7);
+\draw[-,very thick,color=fore] (E)--(C8);
+\end{tikzpicture}
+\end{subfigure}
+\begin{subfigure}[c]{.45\textwidth}
+\begin{tikzpicture}
+\node[draw=none,inner sep=0pt,minimum size=1pt] (A) at (1,0) {};
+\node[draw=none,inner sep=0pt,minimum size=1pt] (B) at (5,0) {};
+\draw[-,very thick,color=title] (A)--(B);
+\node[draw=none] (C1) at (0,0.75) {};
+\node[draw=none] (C2) at (0,-0.75) {};
+\draw[-,very thick,color=fore] (C1)--(A);
+\draw[-,very thick,color=fore] (C2)--(A);
+\node[draw=none] (C3) at (6,0.75) {};
+\node[draw=none] (C4) at (6,-0.75) {};
+\draw[-,very thick,color=fore] (B)--(C3);
+\draw[-,very thick,color=fore] (B)--(C4);
+\end{tikzpicture}
+\end{subfigure}
+\end{figure}\bigskip
+
+We've known about this illusion since 1889. However, since 1966 we also know that not all cultures experience this in the same way \cite{Segall1966}.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Cross-cultural variance (1)}
+
+<<r ml-illusion, eval=generateFigs>>=
+mlDF <- data.frame(culture = c("Ankole", "Ankole", "Toro", "Toro", "Suku", "Suku",
+                               "Songe", "Songe", "Fang", "Fang", "Bete", "Bete",
+                               "Ijaw", "Ijaw", "Zulu", "Zulu", "San", "San",
+                               "S.A. Europeans", "S.A. Europeans", "S.A. miners",
+                               "S.A. miners", "Senegal", "Senegal", "Dahomey",
+                               "Dahomey", "Hanunoo", "Hanunoo", "Evanston",
+                               "Evanston", "Bassari", "Bassari", "Yuendumu",
+                               "Yuendumu"),
+                   group = c("Adults", "Kids", "Adults", "Kids", "Adults", "Kids",
+                             "Adults", "Kids", "Adults", "Kids", "Adults", "Kids",
+                             "Adults", "Kids", "Adults", "Kids", "Adults", "Kids",
+                             "Adults", "Kids", "Adults", "Kids", "Adults", "Kids",
+                             "Adults", "Kids", "Adults", "Kids", "Adults", "Kids",
+                             "Adults", "Kids", "Adults", "Kids"),
+                   country = c("Uganda", "Uganda", "Uganda", "Uganda", "Congo Republic",
+                               "Congo Republic", "Congo Republic", "Congo Republic",
+                               "Gabon Republic", "Gabon Republic", "Ivory Coast",
+                               "Ivory Coast", "Nigeria", "Nigeria", "South Africa",
+                               "South Africa", "Kalahari Desert", "Kalahari Desert",
+                               "Johannesburg", "Johannesburg", "South Africa",
+                               "South Africa", "Senegal", "Senegal", "Guinea Coast",
+                               "Guinea Coast", "Philippines", "Philippines",
+                               "Illinois, US", "Illinois, US", "Eastern Senegal",
+                               "Eastern Senegal", "Central Australia",
+                               "Central Australia"),
+                   sample = c(131, 93, 49, 37, 40, 21, 45, 44, 42, 43, 38, 37,
+                              47, 37, 21, 14, 36, NA, 36, NA, 60, NA, 74, 51,
+                              NA, 40, 37, 12, 111, 77, 50, 50, 52, NA),
+                   pse = c(0.08, 0.10, 0.06, 0.15, 0.06, NA, 0.05, 0.07,
+                           0.05, 0.09, 0.04, 0.03, 0.04, 0.10, 0.05, 0.11,
+                           0.01, NA, 0.13, NA, 0.01, NA, 0.11, 0.14, NA,
+                           0.12, 0.08, 0.07, 0.19, 0.21, 0.09, 0.11, 0.06, NA))
+
+graph1 <- ggplot(mlDF %>% arrange(pse) %>%
+                   mutate(culture=factor(culture, levels=culture[group=="Adults"])),
+                 aes(x = culture,
+                     y = pse,
+                     fill = group)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_bw() +
+  scale_fill_Publication(name = "Population") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.line.x = element_line(),
+        legend.position = "right") +
+  labs(x = "Cultural group",
+       y = "Point of subjective equality") +
+  scale_y_continuous(label = scales::percent_format(accuracy = 1))
+ggsave(graph1, file = "../03-graphs/01-01.pdf", height = 5, width = 11)
+rm(graph1, mlDF)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.45]{../03-graphs/01-01}
+\caption*{Adapted from \citeA{McCauley2006}}
+\end{figure}
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Cross-national variance (2)}
+
+\begin{table}
+\centering
+\begin{tabular}{lcc}
+\toprule[0.2em]
+	                    & Micro     & Macro            \\
+\midrule
+\textit{Turnout}	    & education & compulsory voting \\
+                      & income    & party polarization \\
+\textit{Trust}        & education & post-communist country \\
+\textit{Religiosity}  & age       & income inequality \\
+                      & gender    & GDP \\
+\bottomrule[0.2em]
+\end{tabular}
+\end{table}
+\bigskip
+\pause
+
+Trying to see the world like this trains your mind: how individual actions shape context, and how context, in turn, shapes individual action.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Reasons for using MLMs}
+\textbf{Substantive}: systematically account for how outcomes (or \textit{effects}) vary across groups, beyond what can be explained by unit-level factors.\bigskip
+\pause
+
+\textbf{Statistical}:
+
+\begin{itemize}
+\item obtain accurate SEs for estimates in instances of clustered data; \pause
+\item \textit{model} the heteroskedasticity (unobserved heterogeneity) in the data.
+\end{itemize}\bigskip
+
+There is the \textit{nuisance} element to deal with, but it's the second statistical reason that's most important.
+\end{frame}
+
+
+
+
+\section{OLS basics}
+\begin{frame}
+\begin{center}
+\Huge Quick OLS recap
+\end{center}
+\end{frame}
+
+% FRAME
+\begin{frame}
+  \frametitle{OLS mechanics}
+\begin{equation}
+\footnotesize
+Y_i=\beta_0 + \beta_1*X1_{i} + \dots + \beta_k*Xk_{i} + \epsilon_i,\; \epsilon \sim \mathcal{N}(0,\sigma^2)
+\end{equation}
+
+Here, $Y$ is the dependent variable, $X1$ through $Xk$ are the independent variables (IVs), and $\epsilon$ is the residual (error).\bigskip
+\pause
+
+These $\epsilon_1$, $\epsilon_2$, \dots $\epsilon_n$ have, collectively, a normal distribution with mean 0 and constant variance (a key Gauss-Markov assumption).
+
+\end{frame}
+
+
+% FRAME
+\begin{frame}
+  \frametitle{A quick example}
+
+<<r read-data>>=
+df_issp <- readRDS("../02-data/01-ISSP.rds")
+@
+
+<<r standard-ols, eval=generateFigs>>=
+df_bel <- df_issp %>%
+  filter(country == "Belgium")
+
+model.1 <- lm(poleff ~ age10 + female + educ + as.factor(incquart) + urban,
+              data = df_bel,
+              na.action = na.omit)
+texreg(list(model.1),
+       digits = 3,
+       dcolumn = TRUE,
+       booktabs = TRUE,
+       use.packages = FALSE,
+       single.row = TRUE,
+       fontsize = "footnotesize",
+       custom.coef.names = c("(Intercept)","Age (decades)", "Gender: woman",
+                             "Education (no. of years)", "Income: 2nd quartile",
+                             "Income: 3rd quartile", "Income: 4th quartile",
+                             "Residence: urban"),
+       custom.model.names = c("DV: Political efficacy"),
+       caption = NULL)
+rm(belDF, model.1)
+@
+
+\begin{minipage}{0.60\textwidth}
+\centering
+\begin{table}
+\begin{center}
+\begin{footnotesize}
+\begin{tabular}{l D{)}{)}{13)3} }
+\toprule[0.2em]
+ & \multicolumn{1}{c}{DV: Political efficacy} \\
+\midrule
+(Intercept)              & 2.155 \; (0.106)^{***}  \\
+Age (decades)            & 0.019 \; (0.011)        \\
+Gender: woman            & -0.189 \; (0.034)^{***} \\
+Education (no. of years) & 0.046 \; (0.006)^{***}  \\
+Income: 2nd quartile     & 0.021 \; (0.049)        \\
+Income: 3rd quartile     & 0.071 \; (0.049)        \\
+Income: 4th quartile     & 0.274 \; (0.052)^{***}  \\
+Residence: urban         & 0.154 \; (0.035)^{***}  \\
+\midrule
+R$^2$                    & 0.105                   \\
+Adj. R$^2$               & 0.101                   \\
+Num. obs.                & 1683                    \\
+RMSE                     & 0.703                   \\
+\bottomrule[0.2em]
+\multicolumn{2}{l}{\tiny{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}}
+\end{tabular}
+\end{footnotesize}
+\end{center}
+\end{table}
+\end{minipage}
+\begin{minipage}{0.36\textwidth}
+\textbf{ISSP} data, Citizenship module II, Belgium (2016).\bigskip
+
+\textit{Political efficacy} is an index constructed by averaging 4 attitudinal items, each measured on a 5-point scale.
+\end{minipage}
+
+\end{frame}
+
+
+% FRAME
+\begin{frame}
+  \frametitle{One OLS assumption}
+
+\textbf{Homoskedasticity}: $\epsilon \sim \mathcal{N}(0,\sigma^2)$.\footnote{For an in-depth coverage, please consult the relevant sections in \citeA{Berry1993} or \citeA{Fox2016}.}
+
+\begin{figure}
+\centering
+\begin{subfigure}[c]{.45\textwidth}
+\begin{tikzpicture}[scale=0.70]
+% For the regression graph below
+\pgfmathsetseed{1139} % set the random seed
+\pgfplotstableset{ % Define the equations for x and y
+ 	create on use/x/.style={create col/expr={\pgfplotstablerow/1.5}},
+ 	create on use/y/.style={create col/expr={1.5*rand}}
+}
+% create a new table with 50 rows and columns x and y:
+\pgfplotstablenew[columns={x,y}]{60}\loadedtable
+\begin{axis}[
+xlabel=X, % label x axis
+ylabel=Residuals, % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=42, % set the min and max values of the x-axis
+ymin=-5, ymax=5, % set the min and max values of the y-axis
+clip=false
+]
+
+\addplot [only marks] table {\loadedtable};
+\draw[ultra thick, dashed, title] (axis cs:\pgfkeysvalueof{/pgfplots/xmin},0) -- (axis cs:\pgfkeysvalueof{/pgfplots/xmax},0);
+\end{axis}
+\end{tikzpicture}
+\caption{Homoskedasticity}
+\end{subfigure}
+\begin{subfigure}[c]{.45\textwidth}
+\begin{tikzpicture}[scale=0.70]
+% For the regression graph below
+\pgfmathsetseed{1141} % set the random seed
+\pgfplotstableset{ % Define the equations for x and y
+	create on use/x/.style={create col/expr={\pgfplotstablerow/1.5}},
+	create on use/y/.style={create col/expr={(5 - \pgfplotstablerow/15)*rand}}
+}
+% create a new table with 50 rows and columns x and y:
+\pgfplotstablenew[columns={x,y}]{60}\loadedtable
+\begin{axis}[
+xlabel=X, % label x axis
+ylabel=Residuals, % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=42, % set the min and max values of the x-axis
+ymin=-5, ymax=5, % set the min and max values of the y-axis
+clip=false
+]
+
+\addplot [only marks] table {\loadedtable};
+\draw[ultra thick, dashed, title] (axis cs:\pgfkeysvalueof{/pgfplots/xmin},0) -- (axis cs:\pgfkeysvalueof{/pgfplots/xmax},0);
+\end{axis}
+\end{tikzpicture}
+\caption{Heteroskedasticity}
+\end{subfigure}
+\end{figure}
+
+\end{frame}
+
+
+% FRAME
+\begin{frame}
+  \frametitle{The case of clustered data}
+
+<<r effect-heterogeneity, eval=generateFigs>>=
+df_issp_small <- df_issp %>%
+  dplyr::select(poleff, age10, female, educ,
+                incquart, urban, country) %>%
+  na.omit()
+
+df_coef <- df_issp_small %>%
+  nest(data = -country) %>%
+  mutate(fit = map(data, ~ lm(poleff ~ age10 + female + educ +
+                                as.factor(incquart) + urban,
+                              data = .)),
+         tidied = map(fit, tidy)) %>%
+  unnest(tidied) %>%
+  dplyr::select(-data)
+
+gr1 <- ggplot(subset(df_coef, df_coef$term == "as.factor(incquart)4"),
+              aes(x = reorder(country, estimate),
+                  y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(x = reorder(country, estimate),
+                    ymin = estimate - 1.96*std.error,
+                    ymax = estimate + 1.96*std.error),
+                width = 0.01,
+                linewidth = 1.25) +
+  theme_bw() +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1.5,
+             color = rgb(255,0,90, maxColorValue = 255)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 16),
+        axis.line.x = element_line()) +
+  labs(x = "Country",
+       y = "Effect of highest income quartile\n on political efficacy")
+ggsave(gr1, filename = "../03-graphs/01-02.pdf",
+       height = 6, width = 10)
+rm(gr1, df_coef, df_issp_small)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.45]{../03-graphs/01-02}
+\end{figure}
+
+\end{frame}
+
+
+
+% FRAME
+\begin{frame}
+  \frametitle{Consequences of heterogeneity}
+
+\begin{minipage}{0.62\textwidth}
+ \centering
+\begin{figure}
+\centering
+\begin{tikzpicture}
+\definecolor{coltitle}{RGB}{255,0,90}
+% For the regression graph below
+\pgfmathsetseed{1142} % set the random seed
+\pgfplotstableset{ % Define the equations for x and y
+	create on use/x/.style={create col/expr={2+2*\pgfplotstablerow}},
+	create on use/y/.style={create col/expr={(0.2*\thisrow{x}+10)+4*rand}},
+	create on use/z/.style={create col/expr={(0.5*\thisrow{x}+10)+4*rand}},
+	create on use/w/.style={create col/expr={(0.9*\thisrow{x}+10)+4*rand}}
+}
+% create a new table with 30 rows and columns x and y:
+\pgfplotstablenew[columns={x,y,z,w}]{30}\loadedtable
+\begin{axis}[
+xlabel=X (predictor), % label x axis
+ylabel=Y (outcome), % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=70, % set the min and max values of the x-axis
+ymin=0, ymax=70, % set the min and max values of the y-axis
+clip=false
+]
+
+\addplot [only marks, mark=square*] table [x={x}, y={y}] {\loadedtable};
+\addplot [only marks, mark=star] table [x={x}, y={z}] {\loadedtable};
+\addplot [only marks] table [x={x}, y={w}] {\loadedtable};
+\addplot [no markers, very thick, dashed, coltitle] table [x=x, y={create col/linear regression={y=y}}] {\loadedtable};
+\addplot [no markers, ultra thick, dotted, coltitle] table [x=x, y={create col/linear regression={y=z}}] {\loadedtable};
+\addplot [no markers, very thick, dashdotted, coltitle] table [x=x, y={create col/linear regression={y=w}}] {\loadedtable};
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+\end{minipage}
+\begin{minipage}{0.34\textwidth}
+In this instance, applying an overall slope (``naive pooling'') to the data will generate heteroskedasticity.\bigskip
+
+This can be addressed with country dummies (\textit{fixed effects}), and a lot of interactions.
+\end{minipage}
+
+\end{frame}
+
+
+\section{Addressing heteroskedasticity}
+
+\begin{frame}
+\begin{center}
+	\Huge Addressing heteroskedasticity
+\end{center}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Fixed Effects}
+Solution: $J-1$ dummy indicators for groups (LSDV approach). Computationally very fast, and conceptually accessible.\bigskip
+\pause
+
+Problems with the strategy:
+
+\begin{itemize}
+  \item Very cumbersome with large number of groups \pause
+  \item Cannot explain \textit{why} slopes vary between groups
+\end{itemize}\bigskip
+\pause
+
+FEs are a very powerful solution, but sometimes at the cost of obscuring dynamics at play.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Cluster-corrected SEs}
+
+They implement a \textit{post hoc} solution: adjust SEs (biased), while leaving $\hat{\beta}$ alone (\textit{supposedly} unbiased).\bigskip
+\pause
+
+If the heteroskedasticity is caused by effect heterogeneity, itself caused by a L2 dynamic at play $\Rightarrow$ model specification itself is incorrect \cite{Freedman2006a}.\bigskip
+\pause
+
+If this is the case $\hat{\beta}$s are incorrect \cite<see also>[]{King2015} and the Huber--White estimator is not very helpful.
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{MLMs: benefits}
+
+Multiple benefits to using an MLM, instead of the previous two strategies \cite{Steenbergen2002a}:
+
+\begin{itemize}
+  \item Combine multiple levels of analysis in a \textit{single} specification (addresses misspecification concerns)\pause
+  \item Explore and \textit{model} causal heterogeneity, using substantive variables, instead of treating it as a nuisance\pause
+  \item Gain the ability to make predictions for new \textit{contexts}
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{MLMs: costs}
+
+These benefits come with costs (as always):
+
+\begin{itemize}
+  \item Increased computational complexity (ML-based estimation)\pause
+  \item More stringent assumptions (operating at each level of the data)\pause
+  \item \textit{Theoretically} more demanding, given potential linkages between predictors at different levels
+\end{itemize}
+\end{frame}
+
+
+
+
+\section{Introducing MLMs}
+\begin{frame}
+\begin{center}
+\Huge Introducing MLMs
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{MLM as compromise solution}
+MLMs: compromise between \textit{no pooling} and \textit{complete pooling} approach.\bigskip
+\pause
+
+\textit{No pooling}: run regressions group-by-group and present estimates of interest.\bigskip
+\pause
+
+\textit{Complete pooling}: ignore group membership completely and run a single model on the entire sample.\bigskip
+\pause
+
+Each approach comes with weaknesses, but MLMs manage to partly overcome these weaknesses.
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Political efficacy example}
+
+<<r new-data>>=
+df_sub <- df_issp %>%
+  dplyr::select(poleff, educ, urban, country, cnt) %>%
+  na.omit()
+@
+
+ISSP \textit{Citizenship II} module, data collected between 2014 and 2016: \Sexpr{length(unique(df_sub$country))} countries and \Sexpr{dim(df_sub)[1]} valid observations on political efficacy, education, and urban residence.\bigskip
+\pause
+
+Outcome---political efficacy:
+
+\begin{itemize}
+\item ``People like me\dots no say in what the government does''
+\item ``Do not think government cares about much what people like me think''
+\item ``Have a pretty good understanding of the important political issues''
+\item ``Most people are better informed about politics [\dots] than I am''
+\end{itemize}\bigskip
+
+Each item measured on 5-point Likert scale; final index is an average of the four (or fewer) items.
+
+\end{frame}
+
+
+\subsection{Complete pooling}
+\begin{frame}
+  \frametitle{Complete pooling (1)}
+
+Predictors:
+
+\begin{itemize}
+\item education: number of years of full-time education (0--35)
+\item urban residence: dichotomous (1=big city, or suburbs of big city)
+\end{itemize}\bigskip
+
+\textcolor{title}{Complete pooling}: fit model on the entire sample, without taking into account group membership.\bigskip
+\pause
+
+\textit{Implication}: information from the entire sample is used in estimating parameters.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Complete pooling (2)}
+
+<<r table-complete-pooling, eval=generateFigs>>=
+model1 <- lm(poleff ~ educ + urban,
+             data = df_sub)
+
+texreg(list(model1),
+       digits = 3,
+       custom.model.names = "DV: Political efficacy",
+       custom.coef.names = c("(Intercept)","Education (years)",
+                             "Urban residence"),
+       single.row = TRUE,
+       booktabs = TRUE,
+       dcolumn = TRUE,
+       use.packages = FALSE)
+@
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l D{.}{.}{5.6} }
+\toprule[0.2em]
+& \multicolumn{1}{c}{DV: Political efficacy} \\
+\midrule
+(Intercept)       & 2.315 \; (0.011)^{***} \\
+Education (years) & 0.047 \; (0.001)^{***} \\
+Urban residence   & 0.083 \; (0.007)^{***} \\
+\midrule
+R$^2$             & 0.066                  \\
+Adj. R$^2$        & 0.066                  \\
+Num. obs.         & 48120                  \\
+RMSE              & 0.749                  \\
+\bottomrule[0.2em]
+\multicolumn{2}{l}{\scriptsize{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}}
+\end{tabular}
+\label{tab:tab-01}
+\end{center}
+\end{table}
+
+\end{frame}
+
+\subsection{No pooling}
+\begin{frame}
+  \frametitle{No pooling}
+
+\textcolor{title}{No pooling}: fit same model separately for each group.\footnote{A variant of this uses country dummies in the model.}\bigskip
+\pause
+
+\textit{Implication}: the estimate for group $j$ is obtained using information from just that group.\bigskip
+\pause
+
+Great for understanding how an effect varies across contexts, and perhaps get clues as to \textit{why}.
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Slopes for education}
+
+<<r plot-no-pooling, eval=generateFigs>>=
+cpoolBeta <- coef(lm(poleff ~ educ + urban, data = df_sub))[2]
+cpoolSEBeta <- se.coef(lm(poleff ~ educ + urban, data = df_sub))[2]
+
+pdf("../03-graphs/01-03.pdf", height = 5, width = 11)
+df_sub %>%
+  dplyr::select(-country) %>%
+  nest(data = -cnt) %>%
+  mutate(fit = map(data, ~ lm(poleff ~ educ + urban,
+                              data = .)),
+         results = map(fit, tidy)) %>%
+  unnest(results) %>%
+  filter(term == "educ") %>%
+  dplyr::select(-c(statistic, p.value)) %>%
+  ggplot(aes(x = reorder(cnt, -estimate), y = estimate)) +
+    geom_hline(yintercept = cpoolBeta, linewidth = 1.25,
+               color = rgb(255, 0, 90, maxColorValue = 255)) +
+    geom_hline(yintercept = cpoolBeta - 1.96*cpoolSEBeta, linewidth = 1.25,
+               linetype = "dashed") +
+    geom_hline(yintercept = cpoolBeta + 1.96*cpoolSEBeta, linewidth = 1.25,
+               linetype = "dashed") +
+    geom_hline(yintercept = 0, linewidth = 1.5, linetype = "dashed") +
+    geom_point(size = 3) +
+    geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                      ymax = estimate + 1.96*std.error),
+                  width = 0.01,
+                  linewidth = 1.25) +
+    labs(x = "Country",
+         y = "Slope for education") +
+    theme_bw() +
+  annotate("label", x = "VE", y = 0.07,
+           label = "Red line is slope for education from complete pooling model") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 16))
+invisible(dev.off())
+rm(cpoolBeta, cpoolSEBeta)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.5]{../03-graphs/01-03}
+\end{figure}
+\pause
+
+Why the difference in CIs between, say, New Zealand and South Africa?
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{\textit{No} vs. \textit{Complete}}
+
+\textit{Complete pooling} eliminates variation in estimates between groups, but minimizes uncertainty.\bigskip
+\pause
+
+\textit{No pooling} maximizes variation in estimates between groups, but results in maximum uncertainty.\bigskip
+\pause
+
+Depending on group size, \textit{no pooling} might also make groups seem more different from each other than they really are \cite{Gelman2007a}.
+
+\end{frame}
+
+
+\subsection{Multilevel estimator}
+\begin{frame}
+  \frametitle{Multilevel estimator (1)}
+
+\begin{equation}
+\centering
+\hat{\alpha_j}^{MLM} \approx \frac{\frac{n_j}{\sigma_y^2}\bar{y}_j + \frac{1}{\sigma_{\alpha}^2}\bar{y}_{all}}{\frac{n_j}{\sigma_y^2} + \frac{1}{\sigma_{\alpha}^2}}
+\label{eq:eq-01}
+\end{equation}
+
+\begin{itemize}
+\item $\bar{y}_j$: unpooled estimate
+\item $\bar{y}_{all}$: completely pooled estimate
+\item $n_j$: sample size in group $j$
+\item $\sigma_y^2$: within-group variance in outcome
+\item $\sigma_{\alpha}^2$: variance in average level of outcome between groups
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Multilevel estimator (2)}
+
+\begin{equation}
+\centering
+\hat{\alpha_j}^{MLM} \approx \frac{\frac{n_j}{\sigma_y^2}\bar{y}_j + \frac{1}{\sigma_{\alpha}^2}\bar{y}_{all}}{\frac{n_j}{\sigma_y^2} + \frac{1}{\sigma_{\alpha}^2}}
+\end{equation}
+
+Smaller $n_j$ $\Rightarrow$ MLM estimate for group $j$ is pulled closer to $\bar{y}_{all}$.\bigskip
+\pause
+
+Greater homogeneity of groups $\Rightarrow$ greater differences in means between groups $\Rightarrow$ $\sigma_y^2$ is lower and $\sigma_{\alpha}^2$ is higher $\Rightarrow$ MLM estimate is pulled closer to $\bar{y}_{j}$.
+
+\end{frame}
+
+
+
+\section{MLM notation}
+\begin{frame}
+\begin{center}
+    \Huge MLM notation
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{From OLS to MLM (1)}
+
+\begin{equation}
+\centering
+EFF_i = \beta_0 + \beta_1*EDU_i + \beta_2*URB_i + \epsilon_i,\: with\: \epsilon_i \sim \mathcal{N}(0, \sigma_{\epsilon}^2)
+\end{equation}\pause
+
+MLM extension is not that different.
+
+\begin{equation}
+\centering
+EFF_{i\textcolor{title}{j}} = \beta_{0\textcolor{title}{j}} + \beta_{1\textcolor{title}{j}}*EDU_{i\textcolor{title}{j}} + \beta_{2\textcolor{title}{j}}*URB_{i\textcolor{title}{j}} + \epsilon_{i\textcolor{title}{j}}
+\end{equation}
+
+$i$ indexes level-1 units, while $j$ indexes level-2 groups.\bigskip
+\pause
+
+The equation denotes that the intercepts and slopes for each of the $j$ groups are getting their own statistical specification.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{From OLS to MLM (2)}
+
+For now, we only want a meaningful specification for the intercept.\bigskip
+
+\begin{equation}
+\centering
+\beta_{0\textcolor{title}{j}} = \gamma_{00} + \gamma_{01}*CORR_{\textcolor{title}{j}} + \upsilon_{0\textcolor{title}{j}}
+\end{equation}\pause
+
+Interpretation: the level of political efficacy in a country (controlling for level-1 factors) is associated with the level of (perceived) corruption in the country.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{From OLS to MLM (3)}
+
+Though we could write a similar model for either, or both, of the level-1 slopes, let's keep them fixed for now.
+
+\begin{equation}
+\begin{cases}
+\beta_{1\textcolor{title}{j}} = \gamma_{10} \\
+\beta_{2\textcolor{title}{j}} = \gamma_{20}
+\end{cases}
+\end{equation}\pause
+
+The implication: the effect of education on the level of political efficacy, and of urban residence on efficacy, \textit{is identical} for each of the $J$ groups.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{From OLS to MLM (4)}
+
+Taken together, we have 4 equations, at 2 levels.
+
+\begin{equation}
+\begin{cases}
+EFF_{ij}=\beta_{0j} + \beta_{1j}*EDU_{ij} + \beta_{2j}*URB_{ij} + \epsilon_{ij} \\
+\beta_{0j} = \gamma_{00} + \gamma_{01}*CORR_{j} + \upsilon_{0j} \\
+\beta_{1j} = \gamma_{10} \\
+\beta_{2j} = \gamma_{20}
+\end{cases}
+\end{equation}\pause
+
+Subscripts vary depending on whether the variable is measured at level-1 (\texttt{URB} or \texttt{EDU}) or at level-2 (\texttt{CORR}).
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{MLM specification---extended form}
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+\textit{Extended form} obtained by plugging in last 3 equations into the first one.
+
+\begin{equation}
+\footnotesize
+\begin{aligned}
+EFF_{ij}={} & \gamma_{00} + \gamma_{01}*CORR_{j} + \upsilon_{0j} + \gamma_{10}*EDU_{ij} + \gamma_{20}*URB_{ij} + \epsilon_{ij} =
+  \\ \\
+ ={} & \gamma_{00} + \gamma_{10}*EDU_{ij} + \gamma_{20}*URB_{ij} + \gamma_{01}*CORR_{j} + \upsilon_{0j} + \epsilon_{ij}
+\end{aligned}
+\end{equation}\pause
+
+\textcolor{title}{Fixed} effects: $\gamma_{00}$, $\gamma_{10}$, $\gamma_{20}$, and $\gamma_{01}$.
+
+\textcolor{title}{Random} effects: $\upsilon_{0j}$, and $\epsilon_{ij}$.\bigskip
+\pause
+
+The models which incorporate both began to be known as \textit{mixed-effects models}.\only<3->{\footnote{The distinction between \textit{fixed} and \textit{random} comes from the experimental design literature. \citeA{Gelman2007a} reject the name, which they consider confusing.}}
+\egroup
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Fixed vs. random}
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+Fixed-effects are interpreted in exactly the same way as coefficients in regression.\bigskip\pause
+
+Random-effects, though, despite their name, are not interpreted as effects. They are, rather, variances of residuals.\bigskip\pause
+
+The latter are useful to report---to the extent that they gradually become smaller, they indicate improvements in model fit.\only<3->{\footnote{A popular measure of model fit for multilevel models, called $R^2$, is based on these random-effects \cite{Snijders1999}.}}
+\egroup
+
+\end{frame}
+
+
+\section{Practical example}
+\begin{frame}
+\begin{center}
+    \Huge Practical example
+\end{center}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{First model (1)}
+
+<<r prepare-data-model>>=
+df_sub <- df_issp %>%
+  dplyr::select(poleff, educ, urban, ti_cpi, cnt) %>%
+  na.omit()
+
+# Rescale predictors at L1
+df_sub <- df_sub %>%
+  group_by(cnt) %>%
+  mutate(educCWC = arm::rescale(educ),
+         urbanCWC = arm::rescale(urban)) %>%
+  ungroup()
+
+# Do grand-mean centering at L2
+df_summ <- df_sub %>%
+  group_by(cnt) %>%
+  summarise(cpi = mean(ti_cpi, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(cpiCGM = arm::rescale(cpi)) %>%
+  dplyr::select(-cpi)
+
+# Merge the two files
+df_sub <- left_join(df_sub,
+                    df_summ,
+                    by = "cnt")
+rm(df_summ)
+@
+
+<<r first-model, eval=generateFigs, echo=TRUE, results='markup', size="footnotesize">>=
+model1 <- lmer(formula = poleff ~ 1 + educCWC + urbanCWC + cpiCGM + (1 | cnt),
+               data = df_sub,
+               REML = TRUE)
+@
+
+The formula is similar to OLS specification---L1 \& L2 predictors mixed together, as in the extended form.\bigskip\pause
+
+\texttt{(1 | cnt)}: random effects part. \texttt{1} means only a random intercept, varying between \texttt{cnt}.\bigskip\pause
+
+REML = restricted maximum likelihood (type of estimation)
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{First model (2)}
+
+<<r display-first-model, eval=generateFigs>>=
+texreg(list(model1),
+       digits = 3,
+       custom.model.names = "DV: Political efficacy",
+       custom.coef.names = c("(Intercept)","Education",
+                             "Urban residence",
+                             "Perceived absence of corruption"),
+       booktabs = TRUE,
+       dcolumn = TRUE,
+       use.packages = FALSE)
+@
+
+\begin{table}
+\begin{center}
+\footnotesize
+\begin{tabular}{l D{.}{.}{6.6} }
+\toprule[0.2em]
+ & \multicolumn{1}{c}{DV: Political efficacy} \\
+\midrule
+(Intercept)  (\textcolor{title}{$\gamma_{00}$})            & 2.952^{***} \\
+                                                           & (0.044)     \\
+Education (no. of years) (\textcolor{title}{$\gamma_{10}$})& 0.345^{***} \\
+                                                           & (0.006)     \\
+Urban residence (\textcolor{title}{$\gamma_{20}$})         & 0.048^{***} \\
+                                                           & (0.007)     \\
+Perceived absence of corruption (\textcolor{title}{$\gamma_{01}$})& 0.272^{*}   \\
+                                                           & (0.089)     \\
+\midrule
+Num. obs.                                                  & 48120       \\
+Num. groups: country                                       & 35          \\
+Var: country (Intercept) (\textcolor{title}{$\upsilon_{0j}$})& 0.067       \\
+Var: Residual (\textcolor{title}{$\epsilon_{ij}$})           & 0.492       \\
+\bottomrule[0.2em]
+\multicolumn{2}{l}{\scriptsize{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}}
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\section{ICC}
+\begin{frame}
+\begin{center}
+    \Huge ICC
+\end{center}
+\end{frame}
+
+\section{Clustering and ICC}
+
+\begin{frame}
+  \frametitle{Are MLMs needed \textit{always}?}
+
+Truthful answer is \textbf{\textit{no}}.\bigskip
+\pause
+
+Go back to the formula for the estimator (Equation \ref{eq:eq-01}): The more heterogeneous the groups, the estimate is pulled toward $\bar{y}_{all}$, making a complete pooling model more attractive.\bigskip\pause
+
+In extreme situations (groups are completely homogenenous inside, or are completely identical to each other), there's no need to invest in a MLM.\bigskip\pause
+
+How can we tell when an MLM will be useful?
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Clustering}
+
+We need a measure of how much clustering there is in a two-stage sample. This ties into the issue of \textit{design effect} \cite{Snijders1999}.\pause
+
+\begin{equation}
+\centering
+SE = \frac{SD}{\sqrt{n}}
+\end{equation}\pause
+
+\textcolor{title}{Design effect}: by how much do we have to adjust $n$ to correct for the lack of independence among observations?
+
+\begin{equation}
+\centering
+DE = 1 + (n - 1)\rho
+\end{equation}\pause
+
+Formula above is valid for equal group sizes. The more homogeneous the groups ($\rho$ is higher), the design effect is larger $\Rightarrow$ the effective sample size is smaller!
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Clustering}
+
+The \textcolor{title}{ICC} (intraclass correlation coefficient): $\rho = \frac{\sigma_{\alpha}^2}{\sigma_{\alpha}^2 + \sigma_{y}^2}$. In this formula, $\sigma_{total}^2 = \sigma_{\alpha}^2 + \sigma_{y}^2$ (between-group variance and within-group variance).\bigskip\pause
+
+Denotes the share of total variance that is between groups (can also be expressed as a correlation coefficient of individuals \textit{within} the same group).\pause
+
+\begin{figure}
+\centering
+\begin{subfigure}[c]{.45\textwidth}
+\centering
+\begin{tikzpicture}[scale = 0.45]
+\begin{axis}[
+xlabel= EFF score, % label x axis
+ylabel=Country, % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=9, % set the min and max values of the x-axis
+xtick={1,2,3,4,5,6,7,8,9},
+xticklabels={1,1.5,2,2.5,3,3.5,4,4.5,5},
+ymin=0, ymax=11, % set the min and max values of the y-axis
+ytick={2,4,6,8,10},
+yticklabels={A, B, C, D, E},
+clip=false
+]
+
+\draw [ultra thick] (axis cs:1,2)--(axis cs:8,2);
+\draw [ultra thick] (axis cs:2,4)--(axis cs:9,4);
+\draw [ultra thick] (axis cs:3,6)--(axis cs:8,6);
+\draw [ultra thick] (axis cs:1,8)--(axis cs:9,8);
+\draw [ultra thick] (axis cs:3,10)--(axis cs:9,10);
+\end{axis}
+\end{tikzpicture}
+\caption{Variation mainly within}
+\end{subfigure}
+\begin{subfigure}[c]{.45\textwidth}
+\centering
+\begin{tikzpicture}[scale = 0.45]
+\begin{axis}[
+xlabel= EFF score, % label x axis
+ylabel=Country, % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=9, % set the min and max values of the x-axis
+xtick={1,2,3,4,5,6,7,8,9},
+xticklabels={1,1.5,2,2.5,3,3.5,4,4.5,5},
+ymin=0, ymax=11, % set the min and max values of the y-axis
+ytick={2,4,6,8,10},
+yticklabels={A, B, C, D, E},
+clip=false
+]
+
+\draw [ultra thick] (axis cs:1,2)--(axis cs:3,2);
+\draw [ultra thick] (axis cs:3,4)--(axis cs:5,4);
+\draw [ultra thick] (axis cs:4,6)--(axis cs:7,6);
+\draw [ultra thick] (axis cs:6,8)--(axis cs:8,8);
+\draw [ultra thick] (axis cs:7,10)--(axis cs:9,10);
+\end{axis}
+\end{tikzpicture}
+\caption{Variation mainly between}
+\end{subfigure}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Calculating ICC}
+
+Derived based on a \textit{null} model (with no predictors):
+
+\begin{equation}
+  \centering
+  \footnotesize
+\begin{cases}
+EFF_{ij} = \beta_{0j} + e_{ij} \\
+\beta_{0j} = \gamma_{00} + \upsilon_{0j}
+\end{cases}
+\end{equation}\pause
+
+\begin{equation}
+  \centering
+  \footnotesize
+  EFF_{ij} = \gamma_{00} + \upsilon_{0j} + e_{ij}
+  \label{eq:eq-02}
+\end{equation}\pause
+
+Directly from the model output in \texttt{R} you can compute:
+
+\begin{equation}
+  \centering
+  \footnotesize
+ICC = \frac{\sigma_{\upsilon_{0j}}^2}{\sigma_{\upsilon_{0j}}^2 + \sigma{\epsilon_{ij}}^2}
+\end{equation}
+
+This is the way \citeA{Luke2004} introduces the ICC.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Visualizing the 3 elements}
+
+\begin{figure}
+\centering
+\begin{tikzpicture}
+\draw [ultra thick]  (-2,0) -- (5,0) node [left,font=\tiny] at (-2.2,-1.5) {Overall intercept ($\gamma_{00}$)};
+\draw [->,>=latex] (-3,-1.2) -- (-2.1,-0.05);
+% First group
+\draw [very thick]   (-1.5,1) -- (0.5, 1);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (-1.25, 1.28) {};
+\draw [thick] (-1.25,1) -- (-1.25,1.28);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (-1.05, 0.76) {};
+\draw [thick] (-1.05,1) -- (-1.05,0.76);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (-0.70, 0.5) {};
+\draw [thick] (-0.70,1) -- (-0.70,0.5);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (-0.25, 1.55) {};
+\draw [thick] (-0.25,1) -- (-0.25,1.55);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (0.05, 1.58) {};
+\draw [thick] (0.05,1) -- (0.05,1.58);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (0.45, 0.33) {};
+\draw [thick] (0.45,1) -- (0.45,0.33);
+\draw[decorate,decoration={brace}] (-1.8,0.4) -- (-1.8,1.6) node [left,font=\tiny, text width=1cm] at (-2,1) {Within-group variation};
+\draw[decorate,decoration={brace}] (0.55,0.95) -- (0.55,0.37) node [right,font=\tiny, text width=0.5cm] at (0.55,0.65) {\scalebox{0.8}{Indiv. residual ($e_{ij}$)}};
+\draw [<-, >=latex] (-0.05,1) -- (-0.05,0);
+% Second group
+\draw [very thick]   (2,-1.5) -- (4, -1.5);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (2.1, -1.2) {};
+\draw [thick] (2.1,-1.5) -- (2.1,-1.2);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (2.45, -0.5) {};
+\draw [thick] (2.45,-1.5) -- (2.45,-0.5);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (2.95, -0.7) {};
+\draw [thick] (2.95,-1.5) -- (2.95,-0.7);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (3.25, -2) {};
+\draw [thick] (3.25,-1.5) -- (3.25,-2);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (3.75, -3.1) {};
+\draw [thick] (3.75,-1.5) -- (3.75,-3.1);
+\draw[decorate,decoration={brace}] (1.8,-3.2) -- (1.8,-0.4) node [left,font=\tiny, text width=1cm] at (1.5,-1.8) {Within-group variation};
+\draw [<-, >=latex] (3.8,-1.5) -- (3.8,0);
+\draw[decorate,decoration={brace}] (3.9,-0.05) -- (3.9,-1.45) node [right, font=\tiny, text width=0.1cm] at (3.9,-0.70) {\scalebox{0.8}{Group residual ($u_{0j}$)}};
+% Third group
+\draw [very thick]   (3.5,2) -- (4.5,2) node [left,font=\tiny, text width=1cm] at (2.8,3.2) {Group intercept};
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (3.7, 2.75) {};
+\draw [thick] (3.7,2.75) -- (3.7,2);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (4, 2.2) {};
+\draw [thick] (4,2.2) -- (4,2);
+\node [fill=fore, circle,inner sep=0pt,minimum size=5pt] at (4.1, 1.05) {};
+\draw [thick] (4.1,1.05) -- (4.1,2);
+\draw[decorate,decoration={brace}] (5.7,2) -- (5.7,-1.5) node [right,font=\tiny, text width=1cm] at (5.8,0.25) {Between-group variation};
+\draw [->,>=latex] (2.6,2.8) -- (3.4,2.1); % arrow to label group intercept
+\draw [->,>=latex] (4.4,0) -- (4.4,2);
+\end{tikzpicture}
+\caption*{Adapted from \citeA{Merlo2005}.}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Rules of thumb?}
+
+Not clear whether there are any, apart from those dictated by common sense.\bigskip
+
+With a model with very low ICC (e.g., below 0.05), it will be hard to find any group-level predictor that is statistically significant.\bigskip\pause
+
+In the literature you can encounter mention of minimum values of 0.1--0.15 for the ICC value.
+
+\end{frame}
+
+
+\begin{frame}[fragile]
+  \frametitle{ICC for our example (1)}
+
+<<r null-model-prep, eval=generateFigs>>=
+rm(df_sub)
+df_null <- df_issp %>%
+    dplyr::select(poleff, cnt)
+@
+
+<<r null-model-display, eval=generateFigs, echo=TRUE>>=
+model2 <- lmer(formula = poleff ~ 1 + (1 | cnt),
+               data = df_null,
+               REML = TRUE)
+@
+
+Null model is a specification that contains no substantive predictors (see Equation \ref{eq:eq-02}).\bigskip\pause
+
+It specifies only a random intercept: \texttt{(1 | cnt)}.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{ICC for our example (2)}
+<<r null-model-run, eval=generateFigs>>=
+model2 <- lmer(poleff ~ 1 + (1 | cnt),
+               data = df_null,
+               REML = TRUE)
+
+texreg(list(model2),
+       digits = 5,
+       custom.model.names = "DV: Political efficacy",
+       custom.coef.names = c("(Intercept)"),
+       booktabs = TRUE,
+       dcolumn = TRUE,
+       use.packages = FALSE)
+@
+
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l D{.}{.}{6.8} }
+\toprule[0.2em]
+ & \multicolumn{1}{c}{DV: Political efficacy} \\
+\midrule
+(Intercept) (\textcolor{title}{$\gamma_{00}$})           & 2.94374^{***} \\
+                                                         & (0.04775)     \\
+\midrule
+Var: country (Intercept) (\textcolor{title}{$\sigma_{\upsilon_{0j}}^2$})         & 0.08167       \\
+Var: Residual (\textcolor{title}{$\sigma_{\epsilon_{ij}}^2$})                    & 0.53158       \\
+\midrule
+Num. obs.                                                & 50954         \\
+Num. groups: countries                                   & 36            \\
+\bottomrule[0.2em]
+\multicolumn{2}{l}{\scriptsize{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}}
+\end{tabular}
+\label{table:tab-02}
+\end{center}
+\end{table}\pause
+
+ICC for our example: $\frac{0.08167}{0.08167 + 0.53158} \approx 13.3\%$ of variance in outcome is at level-2 (between countries).
+
+\end{frame}
+
+
+
+\section{Estimation}
+
+\begin{frame}
+\begin{center}
+    \Huge Estimation
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Estimation}
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<4->\oldfootnoterule}
+For fixed effects: (1) least squares, (2) maximum likelihood, or (3) Bayesian.\bigskip\pause
+
+For variance components: (1) maximum likelihood, or (2) Bayesian.\bigskip\pause
+
+In practice, maximum likelihood (ML) is the default estimation method (in the \texttt{lme4} package), but it comes at a price of increased estimation time.\bigskip\pause
+
+\citeA{Lewis2005} outline a strategy, \textit{only for data where clusters have large sample sizes}, to use least squares methods for estimation.\only<4->{\footnote{A combination of OLS and FGLS (\textit{feasible generalized least squares}).}}
+\egroup
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Maximum likelihood (1)}
+Unfortunately, we have to discuss this topic for a little bit as well.\bigskip
+
+Maximum likelihood does the estimation in a different way than OLS---it tries to find the coefficients which maximize the probability (likelihood) that we would get the data we observe.\bigskip\pause
+
+This is not a simple calculation like with OLS, but a iterative procedure: update coefficients $\Rightarrow$ check if they're better $\Rightarrow$ update $\Rightarrow$ check again \dots
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Maximum likelihood (2)}
+
+\textit{Convergence} of the algorithm is reached when the change in coefficients is extremely small.
+
+\begin{figure}
+\centering
+\begin{tikzpicture}[scale=0.8]
+\begin{axis} [%
+yticklabels={,,,}
+]
+    \addplot[domain=-1:2, title, ultra thick] {2*x - x^2};
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Maximum likelihood (3)}
+Setting the first derivative to the likelihood function to 0 gives you the coefficients.
+
+\begin{figure}
+\centering
+\begin{tikzpicture}[scale=0.9]
+\begin{axis} [%
+  yticklabels={,,,},
+  xlabel = Coefficient,
+  ylabel = Likelihood
+]
+    \addplot[domain=-1:2, title, ultra thick] {2*x - x^2};
+\draw [very thick, title, dashed] (axis cs:0,1) -- (axis cs:2,1);
+\draw [thick, title, dashed, draw opacity=0.5] (axis cs:-1,-1) -- (axis cs:0.9,1.2);
+\draw [thick, title, dashed, draw opacity=0.5] (axis cs:2,0.5) -- (axis cs:0.8,1.2);
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Maximum likelihood (4)}
+The second derivative to the likelihood function is used to determine if we found the minimum or maximum.\footnote{If it's negative, we found the maximum; if it's positive, it's a minimum.}\bigskip\pause
+
+This second derivative is also used to determine the curvature of the likelihood function.\bigskip
+
+The steeper the curve, the lower the standard errors.
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Maximum likelihood (5)}
+The mathematical details are not very important right now. What you should care about is that the estimation takes much, much longer than OLS.\bigskip\pause
+
+There are 2 ``flavors'' of ML:
+
+\begin{itemize}
+\item Full Information ML (FIML)
+\item Restricted ML (REML)
+\end{itemize}\pause
+
+Second one is default in \texttt{R}, partly due to a desirable property: it avoids severe bias of variance components when we have low sample sizes at L2.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Maximum likelihood (6)}
+FIML includes both fixed- and random-effects in the likelihood function to be maximized $\Rightarrow$ it produces unbiased estimates of fixed-effects.\bigskip\pause
+
+REML includes only the random-effects in the first stage. The fixed-effects are estimated in a second stage $\Rightarrow$ it produces unbiased estimates of random-effects.\bigskip\pause
+
+In practice, you would mostly use REML (the bias to the fixed effects is very small).
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Alternatives to ML}
+In the past, GLS (generalized least squares) was also used---its main benefit is that it's much faster than ML.\bigskip\pause
+
+However, we've since discovered that variance components from GLS are imprecise, and that the coefficients tend to be biased.\bigskip\pause
+
+A second avenue is Bayesian estimation. Many valid reasons to use it, even when considering the results of \citeA{Elff2020}, but comes with a steeper learning curve.
+
+\end{frame}
+
+
+
+% FRAME
+\begin{frame}
+\begin{center}
+    \Huge Thank \textcolor{title}{you} for the kind attention!
+\end{center}
+\end{frame}
+
+% REFERENCES
+
+\begin{frame}[allowframebreaks]
+\frametitle{References}
+\bibliographystyle{apacite}
+\bibliography{Bibliography}
+\end{frame}
+
+\end{document}

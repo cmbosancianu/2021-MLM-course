@@ -1,0 +1,1784 @@
+% Taken from: https://mikedewar.wordpress.com/2009/02/25/latex-beamer-python-beauty/
+\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169]{beamer}
+\usetheme{default}
+\beamertemplatenavigationsymbolsempty
+\definecolor{fore}{RGB}{51,51,51}
+\definecolor{back}{RGB}{255,255,255}
+\definecolor{title}{RGB}{255,0,90}
+\setbeamercolor{titlelike}{fg=title}
+\setbeamercolor{normal text}{fg=fore,bg=back}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{mathpazo}
+\usepackage{inputenc}
+\usepackage{parskip}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\usepackage{hyperref}
+\hypersetup{pdfauthor={Constantin Manuel Bosancianu},
+pdftitle={Multilevel Modeling},
+pdfsubject={Day 2: Random Slopes},
+pdfkeywords={Bamberg, workshop, MLM, slides, 2021}}
+\usepackage{babel}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.10}
+\usepgfplotslibrary{fillbetween}
+% Defines a checkmark
+\def\checkmark{\tikz\fill[scale=0.4,color=title](0,.35) -- (.25,0) -- (1,.7) -- (.25,.15) -- cycle;}
+\setbeamertemplate{itemize items}{\checkmark}
+% For table captions in Beamer
+\usepackage{caption}
+\captionsetup[figure]{labelfont={color=title}, labelformat=empty}
+\captionsetup[table]{labelfont={color=title}, labelformat=empty}
+% Color of enumerate items
+\setbeamercolor{enumerate item}{fg=title}
+\usepackage{tikz, tikz-cd, animate}
+\usetikzlibrary{shapes,backgrounds,trees}
+\usetikzlibrary{decorations.pathreplacing}
+\usepackage{pgfplotstable}
+\usepackage{wrapfig}
+\usepackage{booktabs}
+\usepackage{dcolumn}
+\usepackage[sectionbib]{apacite}
+\renewcommand{\bibliographytypesize}{\footnotesize}
+% Set the design of the footer
+\makeatletter
+\setbeamertemplate{title page}[default][left]
+\@addtoreset{subfigure}{figure}
+\setbeamercolor{author in head/foot}{fg=white, bg=fore}
+\setbeamercolor{date in head/foot}{fg=white, bg=fore}
+\setbeamercolor{institute in head/foot}{fg=white, bg=fore}
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot}\insertauthor
+  \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,center]{institute in head/foot}%
+    \usebeamerfont{institute in head/foot}Bamberg
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+    \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+    \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+\makeatother
+\title{Multilevel Modeling: Principles and Applications in \texttt{R}}
+\subtitle{Day 2: Random Slopes}
+\author{Constantin Manuel Bosancianu}
+\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:manuel.bosancianu@gmail.com}{manuel.bosancianu@gmail.com}}
+\date{January 21, 2021}
+\begin{document}
+\maketitle
+
+
+% PREAMBLE %
+\section{Preamble}
+\begin{frame}
+  \frametitle{Today}
+
+<<r setup, include = FALSE, warning=FALSE, message=FALSE, comment=NA, results='hide'>>=
+# Setup chunk
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      comment = NA,
+                      eval = TRUE)
+
+check.packages <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE,
+                     repos = "https://cran.rstudio.com")
+  sapply(pkg, require, character.only = TRUE)
+}
+
+pkgList <- c("tidyverse","scales","texreg","nlme","broom",
+             "arm","kableExtra","broom.mixed","ggeffects",
+             "interplot")
+check.packages(pkgList)
+
+# Define the color scheme for all the plots in the slides
+scale_fill_Pres <- function(...){
+  library(scales)
+  discrete_scale("fill","Publication",
+                 manual_pal(values = c("#386cb0","#fdb462","#7fc97f",
+                                       "#ef3b2c","#662506","#a6cee3",
+                                       "#fb9a99","#984ea3","#ffff33")), ...)
+}
+
+scale_colour_Pres <- function(...){
+  library(scales)
+  discrete_scale("colour","Publication",
+                 manual_pal(values = c("#386cb0","#fdb462","#7fc97f",
+                                       "#ef3b2c","#662506","#a6cee3",
+                                       "#fb9a99","#984ea3","#ffff33")), ...)
+}
+
+# Logical switch for generating output
+generateFigs <- FALSE
+
+# Helpful functions
+# Centering - Zoltan Fazekas
+twoSD <- function (x) {
+    (x - mean(x, na.rm = TRUE))/(2 * sd(x, na.rm = TRUE))
+}
+@
+
+Centering in MLMs: why it's done, and how to do it.\bigskip\pause
+
+How to specify \textit{random slopes} in such models.\bigskip\pause
+
+How to interpret and display effects from \textit{cross-level} interactions.\bigskip\pause
+
+Sample size considerations in MLM.
+\end{frame}
+
+
+\section{Centering}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Centering predictors
+\end{center}
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Reasons for centering}
+  So far, you encountered the concept in regression:
+
+  \begin{itemize}
+  \item to make intercept ``more meaningful'' \pause
+  \item to be able to compare effect strength among predictors (\textit{standardization})
+  \end{itemize}
+
+\begin{equation}
+x - \bar{x}
+\label{eq:eq-01}
+\end{equation}\pause
+
+With clustered data, centering represents a technical solution to a unique problem.\bigskip\pause
+
+Without a correction, the coefficient for an individual-level (unit-level, or L1) variable is a mix of ``within-group'' and ``between-group'' relationships.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Mix of patterns}
+
+\begin{figure}[scale=0.9]
+\centering
+\begin{tikzpicture}
+% For the regression graph below
+\pgfmathsetseed{1138} % set the random seed
+\pgfplotstableset{ % Define the equations for x and y
+	create on use/x1/.style={create col/expr={2 + \pgfplotstablerow}},
+	create on use/x2/.style={create col/expr={20 + \pgfplotstablerow}},
+	create on use/x3/.style={create col/expr={40 + \pgfplotstablerow}},
+	create on use/y1/.style={create col/expr={(1.3*\thisrow{x1}+20)+5*rand}},
+	create on use/y2/.style={create col/expr={(1.3*\thisrow{x1}+13)+5*rand}},
+	create on use/y3/.style={create col/expr={(1.3*\thisrow{x1}+5)+5*rand}}
+}
+% create a new table with 10 rows and columns x and y:
+\pgfplotstablenew[columns={x1,x2,x3,y1,y2,y3}]{15}\loadedtable
+\begin{axis}[
+xlabel=X (predictor), % label x axis
+ylabel=Y (outcome), % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=70, % set the min and max values of the x-axis
+ymin=0, ymax=50, % set the min and max values of the y-axis
+clip=false
+]
+
+\addplot [only marks] table [x index=0, y index=3] {\loadedtable};
+\addplot [no markers, thick, title] table [x=x1, y={create col/linear regression={y=y1}}] {\loadedtable};
+\addplot [only marks] table [x index=1, y index=4] {\loadedtable};
+\addplot [no markers, thick, title] table [x=x2, y={create col/linear regression={y=y2}}] {\loadedtable};
+\addplot [only marks] table [x index=2, y index=5] {\loadedtable};
+\addplot [no markers, thick, title] table [x=x3, y={create col/linear regression={y=y3}}] {\loadedtable};
+\draw [very thick, title, dashed] (axis cs:5,35)--(axis cs:55,10);
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Group-mean centering}
+For this problem, centering offers a solution: ``artificially'' erase the between-group variation in the individual-level variables.\bigskip\pause
+
+For each $j$ group, one can center a variable $X$, with the formula
+
+\begin{equation}
+\centering
+X_{centered} = X_{ij} - \overline{X_{j}}
+\label{eq:eq-02}
+\end{equation}
+\bigskip
+
+$\bar{X_{j}}$ is the mean of variable $X$ in the $j$ group. This is called \textbf{group-mean centering} (or \textit{centering within clusters}).
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Centering variables (1)}
+
+\begin{figure}[scale=0.9]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+xlabel=X (predictor), % label x axis
+ylabel=Y (outcome), % label y axis
+axis lines=left, %set the position of the axes
+xmin=0, xmax=70, % set the min and max values of the x-axis
+ymin=0, ymax=50, % set the min and max values of the y-axis
+clip=false
+]
+
+\node [circle, fill, scale=0.3, label={$I_{11}$}] (A) at (axis cs: 5, 35) {};
+\node [circle, fill, scale=0.3, label={$I_{21}$}] (B) at (axis cs: 10, 43) {};
+\node [circle, fill, scale=0.3, label={$I_{12}$}] (C) at (axis cs: 50, 10) {};
+\node [circle, fill, scale=0.3, label={$I_{22}$}] (D) at (axis cs: 55, 17) {};
+\node [circle, scale=0.7] (T1) at (axis cs: 30, 50) {For $I_{11}$, X=5};
+\node [circle, scale=0.7] (T2) at (axis cs: 31, 47) {For $I_{21}$, X=10};
+\node [circle, scale=0.7] (T3) at (axis cs: 50, 30) {For $I_{12}$, X=50};
+\node [circle, scale=0.7] (T4) at (axis cs: 50, 27) {For $I_{22}$, X=55};
+%\draw [very thick, red, dashed] (axis cs:5,35)--(axis cs:55,10);
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Centering variables (2)}
+For group 1, $\overline{X}$=7.5. For group 2, $\overline{X}$=52.5. \bigskip
+
+\begin{table}
+\centering
+\begin{tabular}{l c c}
+\toprule
+    & X raw & X centered \\
+\midrule
+$I_{11}$ & 5 & -2.5 \\
+$I_{21}$ & 10 & 2.5 \\
+$I_{12}$ & 50 & -2.5 \\
+$I_{22}$ & 55 & 2.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+\bigskip\pause
+
+With group-mean centering, the only thing that is left over is the relative position of individuals within a group, e.g. the distance between $I_{11}$ and $I_{21}$ remains 5 after centering.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Grand-mean centering}
+There is a second type of centering, meant for level 2 variables: \textbf{grand-mean centering}.\bigskip
+
+\begin{equation}
+\centering
+Z_{centered} = Z_{j} - \overline{Z}
+\label{eq:eq-03}
+\end{equation}
+\bigskip
+
+In this procedure, we subtract from each group's value on $Z$ the mean of the $Z$s of all groups.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Practical advice}
+Recommendations made by \citeA{Enders2007}, depending on estimates of interest:
+
+\begin{itemize}
+\item $X_{L1} \leadsto Y$: group-mean centering for $X$ \pause
+\item $X_{L2} \leadsto Y$: grand-mean centering for $X$ \pause
+\item $X_{L2} \times X_{L1}$: grand-mean for $X_{L2}$, group-mean for $X_{L1}$ \pause
+\item $X_{L2} \times X_{L2}$: grand-mean for both \pause
+\item $X_{L1} \times X_{L1}$: group-mean for both
+\end{itemize}\bigskip\pause
+
+Unlike in standard regression, centering in MLMs can (and should!) change the magnitude of the estimate.
+\end{frame}
+
+
+\section{Random slopes}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Random slopes
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{MLM specification (1)}
+
+We used a very simple model yesterday:
+
+\begin{equation}
+\begin{cases}
+EFF_{ij}=\beta_{0j} + \beta_{1j}*EDU_{ij} + \beta_{2j}*URB_{ij} + \epsilon_{ij} \\
+\beta_{0j} = \gamma_{00} + \gamma_{01}*CORR_{j} + \upsilon_{0j} \\
+\beta_{1j} = \gamma_{10} \\
+\beta_{2j} = \gamma_{20}
+\end{cases}
+\label{eq:eq-04}
+\end{equation}\pause
+
+Our theory could extend to how the \textit{effect} of a level-1 predictor varies based on a level-2 predictor.\pause
+
+How does the effect of education vary?
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{MLM specification (2)}
+
+\begin{equation}
+\begin{cases}
+EFF_{ij}=\beta_{0j} + \beta_{1j}*EDU_{ij} + \beta_{2j}*URB_{ij} + \epsilon_{ij} \\
+\beta_{0j} = \gamma_{00} + \gamma_{01}*CORR_{j} + \upsilon_{0j} \\
+\beta_{1j} = \gamma_{10} + \gamma_{11}*CORR_{j} + \upsilon_{1j} \\
+\beta_{2j} = \gamma_{20}
+\end{cases}
+\label{eq:eq-05}
+\end{equation}\pause
+
+If we choose to, we can also write up a model for the effect of urban residence on political efficacy.
+
+\end{frame}
+
+
+\begin{frame}{MLM specification---extended form}
+
+The extended form:
+
+\begin{equation}
+\footnotesize
+\begin{aligned}
+EFF_{ij}={} & \overbrace{\gamma_{00} + \gamma_{01}*CORR_{j} + \upsilon_{0j}}^{\beta_{0j}} + \overbrace{(\gamma_{10} + \gamma_{11}*CORR_{j} + \upsilon_{1j})}^{\beta_{1j}}*EDU_{ij} + \\
+  & + \gamma_{20}*URB_{ij} + \epsilon_{ij} =
+  \\ \\
+ ={} & \gamma_{00} + \gamma_{01}*CORR_{j} + \upsilon_{0j} + \gamma_{10}*EDU_{ij} + \gamma_{11}*EDU_{ij}*CORR_{j} + \\
+     &  + \upsilon_{1j}*EDU_{ij} + \gamma_{20}*URB_{ij} + \epsilon_{ij} =
+     \\ \\
+ ={} & \gamma_{00} + \gamma_{10}*EDU_{ij} + \gamma_{20}*URB_{ij} + \gamma_{01}*CORR_{j} + \gamma_{11}*EDU_{ij}*CORR_{j} + \\
+     &  + \upsilon_{1j}*EDU_{ij} + \upsilon_{0j} + \epsilon_{ij}
+\end{aligned}
+\label{eq:eq-06}
+\end{equation}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Extended form}
+
+The extended form is useful as that's the way \texttt{Stata}, \texttt{R}, and even \texttt{SPSS} ask you to specify the model. \texttt{Mplus} is an exception here.\bigskip\pause
+
+Fixed effects: $\gamma_{00}$, $\gamma_{10}$, $\gamma_{20}$, $\gamma_{01}$, and $\gamma_{11}$.\bigskip\pause
+
+Random effects: $\upsilon_{0j}$, $\upsilon_{1j}$, and $\epsilon_{ij}$.\pause
+
+\begin{equation}
+\begin{cases}
+EFF_{ij}=\beta_{0j} + \beta_{1j}*EDU_{ij} + \beta_{2j}*URB_{ij} + \textcolor{title}{\epsilon_{ij}} \\
+\beta_{0j} = \textcolor{title}{\gamma_{00}} + \textcolor{title}{\gamma_{01}}*CORR_{j} + \textcolor{title}{\upsilon_{0j}} \\
+\beta_{1j} = \textcolor{title}{\gamma_{10}} + \textcolor{title}{\gamma_{11}}*CORR_{j} + \textcolor{title}{\upsilon_{1j}} \\
+\beta_{2j} = \textcolor{title}{\gamma_{20}}
+\end{cases}
+\end{equation}
+
+Only the highlighted quantities are being estimated in the model.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Our example---continued}
+
+<<r read-data>>=
+load("../02-data/ISSP.Rdata")
+@
+
+<<r prepare-data>>=
+ISSPsub <- ISSP %>%
+    dplyr::select(poleff, educ, urban, incquart, relatt,
+                  female, ti_cpi, mdmh, polRile, country, cnt) %>%
+    na.omit()
+
+# Recoding script (also does standardizing)
+ISSPsub <- ISSPsub %>%
+    group_by(cnt) %>%
+    mutate(educCWC = arm::rescale(educ),
+           urbanCWC = arm::rescale(urban),
+           femaleCWC = arm::rescale(female),
+           incCWC = arm::rescale(incquart),
+           inc1st = case_when(incquart %in% 1 ~ 1,
+                              incquart %in% 2:4 ~ 0),
+           inc2nd = case_when(incquart %in% 2 ~ 1,
+                              incquart %in% c(1,3,4) ~ 0),
+           inc3rd = case_when(incquart %in% 3 ~ 1,
+                              incquart %in% c(1,2,4) ~ 0),
+           inc4th = case_when(incquart %in% 4 ~ 1,
+                              incquart %in% 1:3 ~ 0),
+           inc1CWC = arm::rescale(inc1st),
+           inc2CWC = arm::rescale(inc2nd),
+           inc3CWC = arm::rescale(inc3rd),
+           inc4CWC = arm::rescale(inc4th),
+           relatt1 = case_when(relatt %in% 1 ~ 1,
+                               relatt %in% 2:3 ~ 0),
+           relatt2 = case_when(relatt %in% 2 ~ 1,
+                               relatt %in% c(1,3) ~ 0),
+           relatt3 = case_when(relatt %in% 3 ~ 1,
+                               relatt %in% 1:2 ~ 0),
+           relatt1CWC = arm::rescale(relatt1),
+           relatt2CWC = arm::rescale(relatt2),
+           relatt3CWC = arm::rescale(relatt3)) %>%
+    dplyr::select(-c(inc1st, inc2nd, inc3rd, inc4th, relatt1, relatt2,
+                     relatt3)) %>%
+    ungroup()
+
+# Continue with standardizing L2 predictors
+ISSPsumm <- ISSPsub %>%
+    group_by(cnt) %>%
+    summarise(ti_cpi = mean(ti_cpi, na.rm = TRUE),
+              polRile = mean(polRile, na.rm = TRUE),
+              mdmh = mean(mdmh, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(mdmhLow = case_when(mdmh <= 1 ~ 1,
+                               mdmh > 1 ~ 0),
+           mdmhMid = case_when(mdmh <= 1 ~ 0,
+                               mdmh > 1 & mdmh<= 5 ~ 1,
+                               mdmh > 5 ~ 0),
+           mdmhHi = case_when(mdmh <= 5 ~ 0,
+                              mdmh > 5 ~ 1)) %>%
+    dplyr::select(-mdmh) %>%
+    mutate(cpiCGM = arm::rescale(ti_cpi),
+           rileCGM = arm::rescale(polRile),
+           mdmhLCGM = arm::rescale(mdmhLow),
+           mdmhMCGM = arm::rescale(mdmhMid),
+           mdmhHCGM = arm::rescale(mdmhHi)) %>%
+    dplyr::select(-c(ti_cpi, polRile, mdmhLow, mdmhMid, mdmhHi))
+
+# Merge centered L2 predictors back into main data frame
+ISSPsub <- left_join(ISSPsub,
+                     ISSPsumm,
+                     by = "cnt")
+rm(ISSPsumm)
+@
+
+
+<<r run-model-intercepts, eval=generateFigs>>=
+# Using inadequate format for income to make equations easier to
+# work with
+model1 <- lmer(poleff ~ 1 + femaleCWC + educCWC + incCWC + urbanCWC +
+                 cpiCGM + (1 | cnt),
+               data = ISSPsub)
+texreg(list(model1),
+       digits = 3,
+       custom.model.names = c("DV: political efficacy"),
+       custom.coef.names = c("(Intercept)", "Woman", "Education (years)",
+                             "Income", "Urban residence",
+                             "Corruption perceptions"),
+       booktabs = TRUE,
+       dcolumn = TRUE,
+       use.packages = FALSE,
+       single.row = TRUE)
+@
+
+\begin{table}
+\begin{center}
+\footnotesize
+\begin{tabular}{l D{)}{)}{13)3} }
+\toprule[0.2em]
+ & \multicolumn{1}{c}{DV: political efficacy} \\
+\midrule
+(Intercept)            & 2.961 \; (0.041)^{***}  \\
+Woman                  & -0.131 \; (0.008)^{***} \\
+Education (years)      & 0.303 \; (0.008)^{***}  \\
+Income                 & 0.182 \; (0.008)^{***}  \\
+Urban residence        & 0.062 \; (0.009)^{***}  \\
+Perceived absence of corruption & 0.439 \; (0.083)^{***}  \\
+\midrule
+Num. obs.                           & 32020                   \\
+Num. groups: country                & 31                      \\
+Var: country (Intercept)            & 0.051                   \\
+Var: Residual                       & 0.474                   \\
+\bottomrule[0.2em]
+\multicolumn{2}{l}{\scriptsize{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}.}
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Our example---a random slope (1)}
+  We first allow for a slope to vary, to see whether there is sufficient variation to be explained (a simpler specification than in Equation \ref{eq:eq-06}).\bigskip\pause
+
+  \begin{equation}
+  \footnotesize
+\begin{cases}
+EFF_{ij}=\beta_{0j} + \beta_{1j}EDU_{ij} + \beta_{2j}URB_{ij} + \beta_{3j}FEM_{ij} + \beta_{4j}INC_{ij} + \epsilon_{ij} \\
+\beta_{0j} = \gamma_{00} + \gamma_{01}CORR_{j} + \upsilon_{0j} \\
+\beta_{1j} = \gamma_{10} + \textcolor{title}{\upsilon_{1j}} \\
+\beta_{2j} = \gamma_{20} \\
+\beta_{3j} = \gamma_{30} \\
+\beta_{4j} = \gamma_{40} \\
+\end{cases}
+\label{eq:eq-07}
+\end{equation}\pause
+
+Not yet explaining \textit{why} the slope of education varies between countries.
+
+\end{frame}
+
+
+\begin{frame}[fragile]
+  \frametitle{Our example---a random slope (2)}
+  Extended form of the model is easy to produce:
+
+  \begin{equation}
+  \begin{split}
+  EFF_{ij} = \gamma_{00} +& \gamma_{10}EDU_{ij} + \gamma_{20}URB_{ij} + \gamma_{30}FEM_{ij} + \gamma_{40}INC_{ij} + \gamma_{01}*CORR_{j} + \\
+           +& \upsilon_{1j}*EDU_{ij} + \upsilon_{0j} + \epsilon_{ij}
+  \end{split}
+  \end{equation}\pause
+
+  <<r show-random-slopes, eval=generateFigs, echo=TRUE, size = "footnotesize">>=
+model2 <- lmer(poleff ~ 1 + educCWC + urbanCWC + femaleCWC + incCWC +
+                 cpiCGM + (1 + educCWC| cnt),
+               data=ISSPsub)
+@
+
+\texttt{lmer()} formula implements extended form of model almost verbatim.
+
+\end{frame}
+
+
+\begin{frame}[fragile]
+  \frametitle{Our example---a random slope (3)}
+
+  <<r run-random-slopes, eval=generateFigs>>=
+model2 <- lmer(poleff ~ 1 + educCWC + urbanCWC + femaleCWC + incCWC +
+                 cpiCGM + (1 + educCWC| cnt),
+               data=ISSPsub)
+texreg(list(model2),
+       digits = 3,
+       custom.model.names = c("DV: political efficacy"),
+       custom.coef.names = c("(Intercept)", "Education (years)",
+                             "Urban residence", "Woman", "Income",
+                             "Corruption perceptions"),
+       booktabs = TRUE,
+       dcolumn = TRUE,
+       use.packages = FALSE,
+       single.row = TRUE)
+@
+
+\begin{table}
+\footnotesize
+\begin{center}
+\begin{tabular}{l D{)}{)}{11)3}}
+\toprule
+ & \multicolumn{1}{c}{DV: political efficacy} \\
+\midrule
+(Intercept)                  & 2.961 \; (0.041)^{***}  \\
+Education (years)            & 0.306 \; (0.020)^{***}  \\
+Urban residence              & 0.065 \; (0.009)^{***}  \\
+Woman                        & -0.132 \; (0.008)^{***} \\
+Income                       & 0.182 \; (0.008)^{***}  \\
+Perceived absence of corruption       & 0.494 \; (0.078)^{***}  \\
+\midrule
+Num. obs.                    & 32020                   \\
+Num. groups: cnt             & 31                      \\
+\midrule
+Var: country (Intercept)     & 0.051                   \\
+Var: country Education       & 0.010                   \\
+Cov: country (Intercept) Education   & -0.009                  \\
+Var: Residual                & 0.471                   \\
+\bottomrule
+\multicolumn{2}{l}{\scriptsize{$^{***}p<0.001$; $^{**}p<0.01$; $^{*}p<0.05$}}
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Random effects}
+
+<<r plot-REs, eval=generateFigs>>=
+pdf("../03-graphs/02-01.pdf", height = 5, width = 11)
+ranef(model2) %>%
+  augment(ci.level = 0.95) %>%
+  filter(variable=="educCWC") %>%
+  ggplot(aes(x = reorder(level, -estimate), y = estimate)) +
+    geom_hline(yintercept = 0, size = 1.25,
+               color = rgb(255, 0, 90, maxColorValue = 255)) +
+    geom_point(size = 3) +
+    geom_errorbar(aes(ymin = lb,
+                      ymax = ub),
+                  width = 0.01,
+                  size = 1.25) +
+    labs(x = "Country",
+         y = "RE for education") +
+    theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 16))
+invisible(dev.off())
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.5]{../03-graphs/02-01}
+\end{figure}\pause
+
+REs are deviations from the fixed-effect for education, not effects themselves!
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Actual slopes}
+
+<<r plot-varying-slopes, eval=generateFigs>>=
+pdf("../03-graphs/02-02.pdf", height = 5, width = 11)
+ranef(model2) %>%
+  augment(ci.level = 0.95) %>%
+  filter(variable=="educCWC") %>%
+  mutate(estimate = estimate + fixef(model2)["educCWC"]) %>%
+  ggplot(aes(x = reorder(level, -estimate), y = estimate)) +
+    geom_hline(yintercept = 0, size = 1.25,
+               color = rgb(255, 0, 90, maxColorValue = 255)) +
+    geom_point(size = 3) +
+    geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                      ymax = estimate + 1.96*std.error),
+                  width = 0.01,
+                  size = 1.25) +
+    labs(x = "Country",
+         y = "Slopes for education") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+          axis.text.y = element_text(size = 14),
+          axis.title.y = element_text(size = 16))
+invisible(dev.off())
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.5]{../03-graphs/02-02}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Comparison: no pooling \& MLM with low N}
+
+<<r comparison-prep-data-run-1, eval=generateFigs>>=
+ISSPsub <- ISSP %>%
+  dplyr::select(poleff, educ, urban, incquart, relatt,
+                female, country, cnt) %>%
+  na.omit()
+
+# Set random seed
+set.seed(37866)
+
+# Reduce the size of two groups
+ISSPin <- ISSPsub %>%
+  filter(cnt=="IN")
+ISSPde <- ISSPsub %>%
+  filter(cnt=="DE")
+ISSPsub <- ISSPsub %>%
+  filter(!(cnt %in% c("IN","DE")))
+
+# Select a random number of cases
+ISSPin <- ISSPin %>%
+  ungroup() %>%
+  sample_n(103)
+
+ISSPde <- ISSPde %>%
+  ungroup() %>%
+  sample_n(148)
+
+ISSPsub <- rbind(ISSPsub, ISSPin, ISSPde)
+rm(ISSPin, ISSPde)
+
+# Recoding script (also does standardizing)
+ISSPsub <- ISSPsub %>%
+    group_by(cnt) %>%
+    mutate(educCWC = arm::rescale(educ),
+           urbanCWC = arm::rescale(urban),
+           femaleCWC = arm::rescale(female),
+           incCWC = arm::rescale(incquart),
+           inc1st = case_when(incquart %in% 1 ~ 1,
+                              incquart %in% 2:4 ~ 0),
+           inc2nd = case_when(incquart %in% 2 ~ 1,
+                              incquart %in% c(1,3,4) ~ 0),
+           inc3rd = case_when(incquart %in% 3 ~ 1,
+                              incquart %in% c(1,2,4) ~ 0),
+           inc4th = case_when(incquart %in% 4 ~ 1,
+                              incquart %in% 1:3 ~ 0),
+           inc1CWC = arm::rescale(inc1st),
+           inc2CWC = arm::rescale(inc2nd),
+           inc3CWC = arm::rescale(inc3rd),
+           inc4CWC = arm::rescale(inc4th),
+           relatt1 = case_when(relatt %in% 1 ~ 1,
+                               relatt %in% 2:3 ~ 0),
+           relatt2 = case_when(relatt %in% 2 ~ 1,
+                               relatt %in% c(1,3) ~ 0),
+           relatt3 = case_when(relatt %in% 3 ~ 1,
+                               relatt %in% 1:2 ~ 0),
+           relatt1CWC = arm::rescale(relatt1),
+           relatt2CWC = arm::rescale(relatt2),
+           relatt3CWC = arm::rescale(relatt3)) %>%
+    dplyr::select(-c(inc1st, inc2nd, inc3rd, inc4th, relatt1, relatt2,
+                     relatt3)) %>%
+    ungroup()
+
+# No pooling model
+mod1 <- ISSPsub %>%
+  dplyr::select(-country) %>%
+  nest(data = -cnt) %>%
+  mutate(fit = map(data, ~ lm(poleff ~ femaleCWC + educCWC + incCWC + urbanCWC,
+                              data = .)),
+         results = map(fit, tidy)) %>%
+  unnest(results) %>%
+  filter(term=="educCWC") %>%
+  dplyr::select(-c(term, statistic, p.value, data, fit)) %>%
+  mutate(model = "nopool")
+
+# Multilevel
+model2 <- lmer(poleff ~ 1 + femaleCWC + educCWC + incCWC + urbanCWC +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+
+# Complete pooling
+cpoolBeta <- coef(lm(poleff ~ femaleCWC + educCWC + incCWC + urbanCWC,
+                     data = ISSPsub))[3]
+
+mod2 <- ranef(model2) %>%
+  augment(ci.level = 0.95) %>%
+  filter(variable=="educCWC") %>%
+  mutate(estimate = estimate + fixef(model2)["educCWC"]) %>%
+  dplyr::select(-c(grp, variable, qq, lb, ub)) %>%
+  rename(cnt = level) %>%
+  mutate(model = "mlm")
+
+finplotDF <- rbind(mod1, mod2)
+rm(mod1, mod2)
+
+pdf("../03-graphs/02-03.pdf", height = 5, width = 11)
+ggplot(finplotDF %>% arrange(-estimate) %>%
+                   mutate(cnt=factor(cnt, levels=cnt[model=="mlm"])),
+  aes(x = cnt, y = estimate, group = model, color = model)) +
+  geom_hline(yintercept = cpoolBeta, size = 1.25,
+             color = rgb(255, 0, 90, maxColorValue = 255)) +
+    geom_point(size = 3,
+               position = position_dodge(width = 0.75)) +
+    geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                      ymax = estimate + 1.96*std.error),
+                  width = 0.01,
+                  size = 1.25,
+                  position = position_dodge(width = 0.75)) +
+    labs(x = "Country",
+         y = "Slopes for education") +
+    theme_bw() +
+  scale_colour_Pres(name = "Type of model",
+                    breaks = c("mlm","nopool"),
+                    labels = c("MLM","No pooling")) +
+  geom_hline(yintercept = 0, size = 1.25, linetype = "dashed") +
+  annotate("label", x = "VE", y = 0.50,
+           label = "Red line denotes education slope from complete pooling model") +
+  annotate("label", x = "CH", y = -0.1,
+           label = "Dashed line denotes no effect") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.y = element_text(size = 16),
+        legend.position = "top")
+invisible(dev.off())
+rm(finplotDF, cpoolBeta, model2, ISSPsub)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.5]{../03-graphs/02-03}
+\caption{10\% of sample for IN and DE was used for demonstration}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Adding predictors for random slopes (1)}
+So far, we have only added a L2 predictor for the random intercept: $\beta_{0j} = \gamma_{00} + \gamma_{01}CORR_{j} + \upsilon_{0j}$.\bigskip
+
+The slope for education was not explained by anything in the previous specification: $\beta_{1j} = \gamma_{10} + \upsilon_{1j}$.\bigskip\pause
+
+We can also explain \textit{systematically} why effects vary across contexts, by adding predictors for the slopes as well.\bigskip\pause
+
+\begin{equation}
+\beta_{1j} = \gamma_{10} + \gamma_{11}CORR_{j} + \upsilon_{1j}
+\label{eq:eq-08}
+\end{equation}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Adding predictors for random slopes (1)}
+A comparison of 3 models:
+
+\begin{itemize}
+\setlength\itemsep{1em}
+  \item RI model with L2 predictor for intercept (Equation~\ref{eq:eq-04})\pause
+  \item RI+RS model with L2 predictor for intercept, but not for slope (Equation~\ref{eq:eq-07}) \pause
+  \item RI+RS model with L2 predictor for both intercept \textit{and} slope (Equation~\ref{eq:eq-06})
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Model comparison}
+
+<<r comparison-prep-data-run-2, eval=generateFigs>>=
+ISSPsub <- ISSP %>%
+  dplyr::select(poleff, educ, urban, incquart, relatt,
+                female, ti_cpi, mdmh, gini10, country,
+                cnt) %>%
+  na.omit()
+
+# Recoding script (also does standardizing)
+ISSPsub <- ISSPsub %>%
+    group_by(cnt) %>%
+    mutate(educCWC = arm::rescale(educ),
+           urbanCWC = arm::rescale(urban),
+           femaleCWC = arm::rescale(female),
+           incCWC = arm::rescale(incquart),
+           inc1st = case_when(incquart %in% 1 ~ 1,
+                              incquart %in% 2:4 ~ 0),
+           inc2nd = case_when(incquart %in% 2 ~ 1,
+                              incquart %in% c(1,3,4) ~ 0),
+           inc3rd = case_when(incquart %in% 3 ~ 1,
+                              incquart %in% c(1,2,4) ~ 0),
+           inc4th = case_when(incquart %in% 4 ~ 1,
+                              incquart %in% 1:3 ~ 0),
+           inc1CWC = arm::rescale(inc1st),
+           inc2CWC = arm::rescale(inc2nd),
+           inc3CWC = arm::rescale(inc3rd),
+           inc4CWC = arm::rescale(inc4th),
+           relatt1 = case_when(relatt %in% 1 ~ 1,
+                               relatt %in% 2:3 ~ 0),
+           relatt2 = case_when(relatt %in% 2 ~ 1,
+                               relatt %in% c(1,3) ~ 0),
+           relatt3 = case_when(relatt %in% 3 ~ 1,
+                               relatt %in% 1:2 ~ 0),
+           relatt1CWC = arm::rescale(relatt1),
+           relatt2CWC = arm::rescale(relatt2),
+           relatt3CWC = arm::rescale(relatt3)) %>%
+    dplyr::select(-c(inc1st, inc2nd, inc3rd, inc4th, relatt1, relatt2,
+                     relatt3)) %>%
+    ungroup()
+
+# Continue with standardizing L2 predictors
+ISSPsumm <- ISSPsub %>%
+    group_by(cnt) %>%
+    summarise(ti_cpi = mean(ti_cpi, na.rm = TRUE),
+              mdmh = mean(mdmh, na.rm = TRUE),
+              gini10 = mean(gini10, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(mdmhLow = case_when(mdmh <= 1 ~ 1,
+                               mdmh > 1 ~ 0),
+           mdmhMid = case_when(mdmh <= 1 ~ 0,
+                               mdmh > 1 & mdmh<= 5 ~ 1,
+                               mdmh > 5 ~ 0),
+           mdmhHi = case_when(mdmh <= 5 ~ 0,
+                              mdmh > 5 ~ 1)) %>%
+    dplyr::select(-mdmh) %>%
+    mutate(cpiCGM = arm::rescale(ti_cpi),
+           mdmhLCGM = arm::rescale(mdmhLow),
+           mdmhMCGM = arm::rescale(mdmhMid),
+           mdmhHCGM = arm::rescale(mdmhHi),
+           giniCGM = arm::rescale(gini10)) %>%
+    dplyr::select(-c(ti_cpi, mdmhLow, mdmhMid, mdmhHi, gini10))
+
+# Merge centered L2 predictors back into main data frame
+ISSPsub <- left_join(ISSPsub,
+                     ISSPsumm,
+                     by = "cnt")
+rm(ISSPsumm)
+
+model1 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + (1 | cnt),
+               data = ISSPsub)
+
+model2 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + (1 + educCWC| cnt),
+               data = ISSPsub)
+
+model3 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + educCWC*cpiCGM +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+
+texreg(list(model1, model2, model3),
+       digits = 3,
+       custom.model.names = c("RI","RI + RS no pred.", "RI + RS & pred."),
+       custom.coef.names = c("(Intercept)","Female","Education","Income: 2nd quartile",
+                             "Income: 3rd quartile", "Income: 4th quartile",
+                             "Urban residence", "Perceptions of corruption",
+                             "Education * Perceptions"),
+       omit.coef = "(inc)|(female)|(urban)",
+       booktabs = TRUE,
+       dcolumn = TRUE)
+@
+
+\begin{table}
+\begin{center}
+\scriptsize
+\begin{tabular}{l D{.}{.}{6.6} D{.}{.}{6.6} D{.}{.}{6.6} }
+\toprule[0.2em]
+ & \multicolumn{1}{c}{RI} & \multicolumn{1}{c}{RI + RS} & \multicolumn{1}{c}{RI + RS} \\
+ &                        & \multicolumn{1}{c}{with no pred.} & \multicolumn{1}{c}{with pred.} \\
+\midrule
+(Intercept)                  & 2.962^{***} & 2.962^{***} & 2.962^{***} \\
+                             & (0.045)     & (0.046)     & (0.045)     \\
+Education                    & 0.288^{***} & 0.292^{***} & 0.292^{***} \\
+                             & (0.008)     & (0.021)     & (0.019)     \\
+Perceived absence of corruption   & 0.300^{**}  & 0.354^{***} & 0.300^{**}  \\
+                             & (0.092)     & (0.090)     & (0.092)     \\
+Education * Perceptions      &             &             & 0.111^{**}  \\
+                             &             &             & (0.039)     \\
+\midrule
+Num. obs.                    & 36486        & 36486        & 36486        \\
+Num. groups: country         & 35           & 35           & 35           \\
+Var: country (Intercept) (\textcolor{title}{$\sigma_{\upsilon_{0j}}^2$})    & 0.072        & 0.072        & 0.072        \\
+Var: Residual   (\textcolor{title}{$\sigma_{\epsilon_{ij}}^2$})             & 0.476        & 0.473        & 0.473        \\
+Var: country Education   (\textcolor{title}{$\sigma_{\upsilon_{1j}}^2$})   &              & 0.014        & 0.011        \\
+Cov: country (Intercept) Education (\textcolor{title}{$\rho\sigma_{\upsilon_{0j}}^2\sigma_{\upsilon_{1j}}^2$}) &              & -0.008       & -0.006       \\
+\bottomrule[0.2em]
+\multicolumn{4}{l}{\scriptsize{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}. Other predictors excluded, along with model fit statistics.}
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Small extensions---practice}
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+As a starting point, use the structure of the RI+RS model with predictors for the slope (Equation~\ref{eq:eq-06}). Write down 2 models:
+
+\begin{itemize}
+\item The specification in RI+RS model with predictors for slope, \textit{plus} \texttt{GINI} as predictor for the intercept (M1)\pause
+\item The specification above, \textit{plus} \texttt{GINI} as another predictor for the slope of education (in addition to corruption) (M2)
+\end{itemize}\pause
+
+How many parameters are estimated in each model?\only<3->{\footnote{If \texttt{GINI} would have been a predictor for the slope of \texttt{URB}, how many parameters would have been estimated?}}
+\egroup
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Small extensions---results}
+
+<<r slopes-extension-more-preds, eval=generateFigs>>=
+model4 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+model5 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM + educCWC*giniCGM +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+
+texreg(list(model4, model5),
+       digits = 3,
+       custom.model.names = c("M1","M2"),
+       custom.coef.names = c("(Intercept)","Female","Education",
+                             "Income: 2nd quantile","Income: 3rd quantile",
+                             "Income: 4th quantile","Urban residence",
+                             "Perceptions of corruption","Gini (10-point)",
+                             "Education * Perceptions","Education * Gini"),
+       single.row = TRUE,
+       booktabs = TRUE,
+       dcolumn = TRUE,
+       use.packages = FALSE)
+@
+
+\begin{table}
+\begin{center}
+\footnotesize
+\begin{tabular}{l D{)}{)}{13)3} D{)}{)}{13)3}}
+\toprule[0.2em]
+ & \multicolumn{1}{c}{M1} & \multicolumn{1}{c}{M2} \\
+  & \multicolumn{1}{c}{$\beta$\;\;\;\;\;\;SE} & \multicolumn{1}{c}{$\beta$\;\;\;\;\;\;SE} \\
+\midrule
+(Intercept)                  & 2.962 \; (0.046)^{***}  & 2.962 \; (0.046)^{***}  \\
+Education                    & 0.292 \; (0.019)^{***}  & 0.292 \; (0.017)^{***}  \\
+Urban residence              & 0.051 \; (0.008)^{***}  & 0.051 \; (0.008)^{***}  \\
+Perceived absence of corruption    & 0.273 \; (0.107)^{*}    & 0.309 \; (0.107)^{**}   \\
+Gini (10-point)              & -0.057 \; (0.104)       & 0.019 \; (0.107)        \\
+Education * Perceptions      & 0.111 \; (0.039)^{**}   & 0.050 \; (0.040)        \\
+Education * Gini             &                         & -0.123 \; (0.039)^{**}  \\
+\midrule
+Var: country (Intercept)         & 0.075                   & 0.074                   \\
+Var: country Education           & 0.011                   & 0.008                   \\
+Cov: country (Intercept) Education & -0.008                  & -0.006                  \\
+Var: Residual                & 0.473                   & 0.473                   \\
+\bottomrule[0.2em]
+\multicolumn{3}{p{12cm}}{\scriptsize{$^{***}p<0.001$, $^{**}p<0.01$, $^*p<0.05$}. Sample sizes same as for previous specifications. Model fit measures and additional predictors excluded.}
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{frame}
+
+
+\section{Cross-level interactions}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Cross-level interactions
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Cross-level interactions}
+Centering helps here, as it reduces the collinearity between main terms and interaction.\footnote{\citeA{Kam2007} point out that this happens because we are effectively changing what we are estimating, i.e. it's not so much a solution as a re-specification.}\bigskip\pause
+
+Education has been group-mean centered and standardized (2SD). Perceptions of corruption and Gini have been grand-mean centered and standardized (2SD).\bigskip\pause
+
+Interpreted in the same way as interactions in regular multiple regression \cite{Brambor2005a}.\bigskip\pause
+
+\textit{Always} turn to graphs to present cross-level interactions.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Education $\times$ Gini}
+
+<<r interaction-plot-1, eval=generateFigs>>=
+graph1 <- interplot(model5,
+                    var1 = "educCWC",
+                    var2 = "giniCGM",
+                    ci = 0.95)
+pdf("../03-graphs/02-04.pdf", height = 5, width = 9)
+graph1 +
+  theme_bw() +
+  labs(x = "Gini (centered CGM)",
+       y = "Effect of education on\n political efficacy") +
+  geom_hline(yintercept = 0, linetype = "dashed",
+             size = 1.25, color = rgb(255, 0, 90, maxColorValue = 255)) +
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title = element_text(size = 16))
+invisible(dev.off())
+rm(graph1)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.5]{../03-graphs/02-04}
+\caption{$\beta_{education}$ depicted at varying levels of \texttt{GINI}}
+\end{figure}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Symmetry of interpretation}
+
+<<r interaction-plot-2, eval=generateFigs>>=
+graph1 <- interplot(model5,
+                    var1 = "giniCGM",
+                    var2 = "educCWC",
+                    ci = 0.95)
+pdf("../03-graphs/02-05.pdf", height = 5, width = 9)
+graph1 +
+  theme_bw() +
+  labs(x = "Education (centered CWC)",
+       y = "Effect of Gini on\n political efficacy") +
+  geom_hline(yintercept = 0, linetype = "dashed",
+             size = 1.25, color = rgb(255, 0, 90, maxColorValue = 255)) +
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title = element_text(size = 16))
+invisible(dev.off())
+rm(graph1)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.5]{../03-graphs/02-05}
+\caption{$\beta_{Gini}$ depicted at varying levels of \texttt{EDU}}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Use actual predictions of outcome}
+
+<<r interaction-plot-3, eval=generateFigs>>=
+dat1 <- ggpredict(model5,
+                  terms = c("educCWC", "giniCGM [-0.4, 0, 0.6]"),
+                  ci.lvl = 0.95,
+                  type = "fe")
+pdf("../03-graphs/02-06.pdf", height = 5, width = 13)
+plot(dat1,
+     facet = TRUE,
+     show.title = FALSE,
+     show.x.title = FALSE,
+     show.y.title = FALSE) +
+  scale_x_continuous(name = "Education (CWC)") +
+  scale_y_continuous(name = "Political efficacy") +
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title = element_text(size = 16))
+invisible(dev.off())
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.4]{../03-graphs/02-06}
+\caption{Panels vary based on different levels of \texttt{GINI}}
+\end{figure}\pause
+
+However, this incorporates only fixed-effect uncertainty.
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{\dots with random-effect uncertainty}
+
+<<r interaction-plot-4, eval=generateFigs>>=
+dat1 <- ggpredict(model5,
+                  terms = c("educCWC", "giniCGM [-0.4, 0, 0.6]"),
+                  ci.lvl = 0.95,
+                  type = "re")
+pdf("../03-graphs/02-07.pdf", height = 5, width = 13)
+plot(dat1,
+     facet = TRUE,
+     show.title = FALSE,
+     show.x.title = FALSE,
+     show.y.title = FALSE) +
+  scale_x_continuous(name = "Education (CWC)") +
+  scale_y_continuous(name = "Political efficacy") +
+  theme(axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title = element_text(size = 16))
+invisible(dev.off())
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.4]{../03-graphs/02-07}
+\caption{Panels vary based on different levels of \texttt{GINI}}
+\end{figure}\pause
+
+Much wider CIs when incorporating both FE \& RE uncertainty.
+
+\end{frame}
+
+
+\section{Sample sizes}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Sample size
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Sample size (1)}
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+As we covered briefly yesterday, this is maximum likelihood estimation. Its desirable properties kick in only in large samples.\bigskip\pause
+
+Usually, the concern is with the level 2 sample size. The minimum is something like 30 \cite{Stegmueller2013}, although a more desirable threshold is 50.\bigskip\pause
+
+Even for low sample sizes ML estimates will be unbiased, but will likely be inefficient.\only<3->{\footnote{There is a bit of a difference here between different types of ML-based estimators. REML is generally better than FIML.}}
+\egroup
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{L2 sample size}
+It's fair, though, to take a more nuanced view of things.\bigskip
+
+\begin{table}
+\centering
+\scriptsize
+\begin{tabular}{l c c}
+\toprule
+Estimate & Continuous DV & Binary DV \\
+\midrule
+L1 fixed-effects point estimates & 5 & 10 \\
+L2 fixed-effects point estimates & 15 & 30 \\
+Fixed-effects std. errors & 30 & 50 \\
+L1 RE estimate & 10 & 30 \\
+L2 RE estimate & 10/30 (REML/FIML) & 10/50 (REML/FIML) \\
+L2 RE std. error & 50 & 100 \\
+\bottomrule
+\end{tabular}
+\caption*{Level 2 minimum sample size requirements \cite{McNeish2016}}
+\end{table}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{L1 group sample size}
+In \textit{vanilla} cross-national research it is typically not a concern, ranging from a few hundred to a few thousands.\bigskip\pause
+
+Strength of MLM: can give an estimate for small groups, borrowing power from larger groups.\bigskip\pause
+
+Interesting case: very many groups, but limited sample size at L1 in each group, e.g. a household survey.\bigskip\pause
+
+You're facing a limit on the number of L1 parameters that you can allow to vary. For HH surveys, depending on the context, usually only 1 random slope.
+\end{frame}
+
+
+
+\section{Model fit indices}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Model fit
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Model fit}
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+Unlike OLS-based regression, where we usually look at a single measure of fit ($R^2$), in multilevel models we have about 4 measures of fit.\bigskip\pause
+
+All are by-products of ML-estimation, and are also frequently reported in the case of GLMs (you might already be familiar with them).\bigskip\pause
+
+$R^2$ had a straightforward set of bounds: between 0 and 1, with higher values suggesting that the model fits the data better.\only<3->{\footnote{The interpretation of the $R^2$ is a bit less straightforward: it is the percentage of variance in the DV explained by the IVs.}}\bigskip\pause
+
+Unfortunately, we don't have a similarly ``well-behaved'' measure for MLMs.
+\egroup
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Model fit---indices}
+4 measures of fit:
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+\begin{itemize}
+\item logLikelihood (LL): the logarithm of the likelihood of the model \pause
+\item deviance: $-2 \times LL$ \pause
+\item Akaike Information Criterion (AIC): $-2 \times LL + 2 \times k$.\only<3->{\footnote{$k$ is the number of parameters estimated by the model.}} \pause
+\item Bayesian Information Criterion (BIC): $-2 \times LL + k \times log_{e} n$.\only<4->{\footnote{$log_{e} n$ is the sample size on which the model is estimated.}}
+\end{itemize}
+\bigskip
+
+All are usually provided as part of the estimation output by most software.\bigskip\pause
+
+We will also discuss a version of the $R^2$ devised for MLM \cite{Snijders1999}.
+\egroup
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Relative fit}
+The values for the 4 measures are meaningless in the absolute---a deviance of 110,034.45 doesn't tell you very much.\bigskip\pause
+
+For MLM, we can use them to compare two or more models with each other, and determine which is the best fitting model.\bigskip\pause
+
+The glitch is that, for the first three measures (LL, deviance, and AIC) we can only compare models \underline{which have been estimated on identical samples}.
+
+\end{frame}
+
+
+\subsection{logLikelihood}
+\begin{frame}
+  \frametitle{logLikelihood}
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<2->\oldfootnoterule}
+The \textit{likelihood} is a by-product of the estimation procedure. It's mathematical definition is a bit abstract: it is the product of the density evaluated at the observations.\bigskip\pause
+
+Generaly speaking, the higher it is the better the model fits the data.\only<2->{\footnote{Will distribute a small document about measures of model fit, which will have more detail.}}\bigskip\pause
+
+Typically, \underline{but not always}, you'll see likelihoods in between 0 and 1.\bigskip\pause
+
+The logarithm of the likelihood will, in this case, be between $-\infty$ and 0.\only<4->{\footnote{$log_{e} 0=-\infty$ and $log_{e} 1=0$. This is because $e^0=1$ and $e^{-\infty}=0$.}}
+\egroup
+
+\end{frame}
+
+
+\subsection{Deviance}
+\begin{frame}
+  \frametitle{Deviance}
+Simple formula: $-2 \times LL$.\bigskip
+
+It's an indicator of \underline{misfit}: the higher the number, the worse the model fit.\bigskip\pause
+
+A loglikelihood of -100 is worse than a loglikelihood of -50, which means that a deviance of 200 ($-100 \times -2$) is worse than a deviance of 100.
+
+\end{frame}
+
+
+\subsection{AIC}
+\begin{frame}
+  \frametitle{AIC}
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<4->\oldfootnoterule}
+The trouble with the \textit{logLikelihood} and the deviance is that they don't take into account how many predictors we have in the model.\bigskip\pause
+
+Like with OLS-based $R^2$ the more predictors we add, the lower the deviance, even if those predictors are not statistically significant.\bigskip\pause
+
+The AIC introduces a penalty for this: $-2 \times LL + 2 \times k$. In this case, the more parameters estimated, the worse the fit (if the value of the deviance is constant).\bigskip\pause
+
+Can be used for comparisons of non-nested models, but with great care.\only<4->{\footnote{See model fit document distributed at the end of the session.}}
+\egroup
+\end{frame}
+
+
+\subsection{BIC}
+\begin{frame}
+  \frametitle{BIC}
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+Compared to the deviance, the BIC implements corrections for both number of parameters estimated, and the sample size on which the model is tested.\bigskip\pause
+
+This allows for comparisons between models tested on different samples, e.g. when adding a variable with missing observations reduces the sample size for model estimation.\bigskip\pause
+
+In practice, I would suggest engaging in such comparisons with care.\only<3->{\footnote{A simple mathematical correction can't cover all empirical configurations of data.}}
+\egroup
+
+\end{frame}
+
+
+\subsection{$R^2$}
+\begin{frame}
+  \frametitle{$R^2$}
+A measure introduced by \citeA{Snijders1999}, but I'll present formulas similar to those from \citeA{Luke2004}, because they are slightly simpler.\bigskip
+
+\begin{equation}
+\centering
+R_{1}^{2} = 1 - \frac{(s_{\upsilon_{0j}}^2 + s_{e_{ij}}^2)_{Model\; 2}}{(s_{\upsilon_{0j}}^2 + s_{e_{ij}}^2)_{Model\; 1}}
+\label{eq:eq-09}
+\end{equation}\pause
+
+\begin{equation}
+\centering
+R_{2}^{2} = 1 - \frac{(s_{\upsilon_{0j}}^2 + \frac{s_{e_{ij}}^2}{n})_{Model\; 2}}{(s_{\upsilon_{0j}}^2 + \frac{s_{e_{ij}}^2}{n})_{Model\; 1}}
+\label{eq:eq-10}
+\end{equation}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{$R^2$}
+In Equation \ref{eq:eq-10}, the $n$ is the Level 1 sample size.\bigskip\pause
+
+They are great for capturing changes at each level of the hierarchy, which makes them more detailed than other measures presented so far.\bigskip\pause
+
+In some instances, though, adding a predictor might result in an \textit{larger} variance of residuals, which translates into a \textit{negative} $R^2$.
+\end{frame}
+
+
+
+\section{Model comparisons}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Model comparisons
+\end{center}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Likelihood ratio test (LRT)}
+Checking which deviance, AIC, or BIC is lower, to identify the better fitting model, is fairly subjective.\bigskip
+
+How do we know whether ``low'' is ``low enough''?\bigskip\pause
+
+We can use a likelihood ratio test: $Deviance_{smaller\; model}$ - $Deviance_{larger\; model}$ has a $\chi^2$ distribution, with $k_{larger\; model} - k_{smaller\; model}$ degrees of freedom.\bigskip\pause
+
+\textit{Important}: Use only with FIML estimation (not REML).\bigskip\pause
+
+\textit{Important}: Use only for \textcolor{title}{nested} models.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Nested models}
+The second model has to have \underline{all} the variables of the first model, and a few extra ones (at least one more).\bigskip\pause
+
+M1: EFF $\Leftarrow$ EDU + URB
+
+M2: EFF $\Leftarrow$ EDU + URB + INC
+
+M3: EFF $\Leftarrow$ EDU + INC\bigskip\pause
+
+M1 is nested in M2. M3 is nested in M2. No nesting relationship between M1 and M3.
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+  \frametitle{LRT in practice (1)}
+
+I compare a few specifications we saw today:
+
+\begin{itemize}
+\item L1 predictors, CPI at L2, and random slope for education;
+\item L1 predictors, CPI at L2, and cross-level interaction between education and CPI;\pause
+\item L1 predictors, CPI and GINI at L2, and cross-level interaction between education and CPI;
+\item L1 predictors, CPI and GINI at L2, and cross-level interactions between education and CPI \& education and GINI;
+\end{itemize}\pause
+
+<<r lrt-prep-data, eval=generateFigs>>=
+ISSPsub <- ISSP %>%
+    dplyr::select(poleff, educ, urban, incquart, relatt,
+                  female, ti_cpi, mdmh, gini10, enep,
+                  polRile, country, cnt) %>%
+    na.omit()
+
+# Recoding script (also does standardizing)
+ISSPsub <- ISSPsub %>%
+    group_by(cnt) %>%
+    mutate(educCWC = arm::rescale(educ),
+           urbanCWC = arm::rescale(urban),
+           femaleCWC = arm::rescale(female),
+           incCWC = arm::rescale(incquart),
+           inc1st = case_when(incquart %in% 1 ~ 1,
+                              incquart %in% 2:4 ~ 0),
+           inc2nd = case_when(incquart %in% 2 ~ 1,
+                              incquart %in% c(1,3,4) ~ 0),
+           inc3rd = case_when(incquart %in% 3 ~ 1,
+                              incquart %in% c(1,2,4) ~ 0),
+           inc4th = case_when(incquart %in% 4 ~ 1,
+                              incquart %in% 1:3 ~ 0),
+           inc1CWC = arm::rescale(inc1st),
+           inc2CWC = arm::rescale(inc2nd),
+           inc3CWC = arm::rescale(inc3rd),
+           inc4CWC = arm::rescale(inc4th),
+           relatt1 = case_when(relatt %in% 1 ~ 1,
+                               relatt %in% 2:3 ~ 0),
+           relatt2 = case_when(relatt %in% 2 ~ 1,
+                               relatt %in% c(1,3) ~ 0),
+           relatt3 = case_when(relatt %in% 3 ~ 1,
+                               relatt %in% 1:2 ~ 0),
+           relatt1CWC = arm::rescale(relatt1),
+           relatt2CWC = arm::rescale(relatt2),
+           relatt3CWC = arm::rescale(relatt3)) %>%
+    dplyr::select(-c(inc1st, inc2nd, inc3rd, inc4th, relatt1, relatt2,
+                     relatt3)) %>%
+    ungroup()
+
+# Continue with standardizing L2 predictors
+ISSPsumm <- ISSPsub %>%
+    group_by(cnt) %>%
+    summarise(ti_cpi = mean(ti_cpi, na.rm = TRUE),
+              mdmh = mean(mdmh, na.rm = TRUE),
+              gini10 = mean(gini10, na.rm = TRUE),
+              enep = mean(enep, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(mdmhLow = case_when(mdmh <= 1 ~ 1,
+                               mdmh > 1 ~ 0),
+           mdmhMid = case_when(mdmh <= 1 ~ 0,
+                               mdmh > 1 & mdmh<= 5 ~ 1,
+                               mdmh > 5 ~ 0),
+           mdmhHi = case_when(mdmh <= 5 ~ 0,
+                              mdmh > 5 ~ 1)) %>%
+    dplyr::select(-mdmh) %>%
+    mutate(cpiCGM = arm::rescale(ti_cpi),
+           mdmhLCGM = arm::rescale(mdmhLow),
+           mdmhMCGM = arm::rescale(mdmhMid),
+           mdmhHCGM = arm::rescale(mdmhHi),
+           giniCGM = arm::rescale(gini10),
+           enepCGM = arm::rescale(enep)) %>%
+    dplyr::select(-c(ti_cpi, mdmhLow, mdmhMid, mdmhHi, gini10, enep))
+
+# Merge centered L2 predictors back into main data frame
+ISSPsub <- left_join(ISSPsub,
+                     ISSPsumm,
+                     by = "cnt")
+rm(ISSPsumm)
+@
+
+<<r lrt-run-models, eval=generateFigs>>=
+model2 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + (1 + educCWC| cnt),
+               data = ISSPsub)
+model3 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + educCWC*cpiCGM +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+model4 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+model5 <- lmer(poleff ~ 1 + femaleCWC + educCWC + inc2CWC + inc3CWC + inc4CWC +
+                 urbanCWC + cpiCGM + educCWC*cpiCGM + giniCGM + educCWC*giniCGM +
+                 (1 + educCWC| cnt),
+               data = ISSPsub)
+@
+
+Because by default these models were estimated with REML, they will have to be re-estimated with FIML first.
+
+\end{frame}
+
+
+
+
+\begin{frame}[fragile]
+  \frametitle{LRT in practice (2)}
+
+<<r display-lrt-results, eval=generateFigs>>=
+disp1 <- anova(model2, model3, model4, model5)
+
+anovRes <- data.frame(Models = c("M1","M2","M3","M4"),
+                      k = disp1$npar,
+                      AIC = disp1$AIC,
+                      BIC = disp1$BIC,
+                      Deviance = disp1$deviance,
+                      Chisq = disp1$Chisq,
+                     `Chisq D.F.` = disp1$Df,
+                      p = disp1$`Pr(>Chisq)`)
+kable(anovRes, format = "latex")
+@
+
+\begin{table}
+\begin{tabular}{l c c c c c c c}
+\toprule[0.2em]
+Models & \textit{k} & AIC & BIC & Deviance & Chisq & Chisq. D.F. & p\\
+\midrule
+M1 & 12 & 66982.55 & 67083.04 & 66958.55 & NA & NA & NA\\
+M2 & 13 & 66980.72 & 67089.59 & 66954.72 & 3.825 & 1 & 0.050\\
+M3 & 14 & 66982.67 & 67099.90 & 66954.67 & 0.059 & 1 & 0.809\\
+M4 & 15 & 66979.33 & 67104.94 & 66949.33 & 5.332 & 1 & 0.021\\
+\bottomrule[0.2em]
+\end{tabular}
+\caption{Model fit comparison table from \texttt{anova()} function}
+\end{table}\pause
+
+\textit{Verdict}: $M4 > M3 \approx M2 > M1$
+
+\end{frame}
+
+
+
+
+\section{Data management}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Data management for MLM
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Data management}
+To wrap up, a ``lighter'' topic: how to manage data for an MLM analysis.\bigskip\pause
+
+If you already have a data set which was built from the ground up with MLM in mind (e.g. CSES, WVS, ESS), half the work is already done.\bigskip\pause
+
+You'll want to add some more group-level data to it (e.g. income inequality, unemployment rate), which means you'll have to build an additional data set yourself.
+
+\end{frame}
+
+
+\begin{frame}[fragile]
+  \frametitle{Data management (1)}
+Merging will be done with the \texttt{join} family of function from \texttt{dplyr}.\bigskip
+
+<<r data-manage-1, eval=generateFigs, echo=TRUE>>=
+merged_data <- left_join(l1data, l2data, by = "ID_var")
+@
+\pause
+
+The two data sets have to have a variable called the same, with the same categories (if we continue with the country example, these categories can be the country names).\bigskip\pause
+
+\textit{Biggest danger}: \texttt{merged\_data} ends up having duplicated rows, because there is more than one observation in \texttt{l2data} that can be matched with an observation from \texttt{l1data}.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Data management (2)}
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<2->\oldfootnoterule}
+\begin{table}
+\parbox{0.45\linewidth}{
+\centering
+\begin{tabular}{l l l}
+\toprule
+country & $X_1$ & $X_2$ \\
+\midrule
+Albania & 1 & 10000 \\
+Algeria & 1 & 8000 \\
+Belgium & 0 & 22000 \\
+\bottomrule
+\end{tabular}
+\caption{Data 1}}
+\parbox{0.45\linewidth}{
+\centering
+\begin{tabular}{l l l}
+\toprule
+country & $X_3$ & $X_4$ \\
+\midrule
+Albania & 25 & 1 \\
+Algeria & 40 & 0 \\
+Argentina & 35 & 5 \\
+Belgium & 120 & 9 \\
+Bulgaria & 25 & 6 \\
+\bottomrule
+\end{tabular}
+\caption{Data 2}}
+\end{table}\pause
+
+Here, the \texttt{country} variable is the same, and we can merge the data without a problem, since all the categories in the first data set are also present in the second (Albania, Algeria, Belgium).\only<2->{\footnote{Had this not been the case, the merging procedure wouldn't have worked.}}
+\egroup
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Data management (3)}
+If, however, you have to construct the data by yourselves, a good practice is to pay very close attention to the ID variable (in the past example, this was \texttt{country}).\bigskip\pause
+
+As the data sets become more and more complex (pupils in classrooms, in schools, in countries), you have to make sure this variable is as clear and clean as possible.\bigskip\pause
+
+Also, try to keep the level 1 and level 2 data sets separate, up until the actual moment of running the analyses---it makes it easier to graphically examine the variables.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Wide format}
+
+\begin{table}
+\scriptsize
+\begin{tabular}{lrrrrrrr}
+  \toprule[0.2em]
+  Religion & $<$\$10k & \$10-20k & \$20-30k & \$30-40k & \$40-50k & \$50-75k & \$75-100k \\
+  \midrule
+  Agnostic &  27 &  34 &  60 &  81 &  76 & 137 & 122 \\
+  Atheist &  12 &  27 &  37 &  52 &  35 &  70 &  73 \\
+  Buddhist &  27 &  21 &  30 &  34 &  33 &  58 &  62 \\
+  Catholic & 418 & 617 & 732 & 670 & 638 & 1116 & 949 \\
+  Evangelical Protestant & 575 & 869 & 1064 & 982 & 881 & 1486 & 949 \\
+  Hindu &   1 &   9 &   7 &   9 &  11 &  34 &  47 \\
+  Hist. Black Protestant & 228 & 244 & 236 & 238 & 197 & 223 & 131 \\
+  Jehovah's Witness &  20 &  27 &  24 &  24 &  21 &  30 &  15 \\
+  Jewish &  19 &  19 &  25 &  25 &  30 &  95 &  69 \\
+  DK/ref &  15 &  14 &  15 &  11 &  10 &  35 &  21 \\
+  \bottomrule[0.2em]
+\end{tabular}
+\end{table}
+
+Easy to look at breakdowns and examine associations, but not easy to feed into \texttt{R}'s functions.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Long format}
+
+\begin{table}
+\centering
+\begin{tabular}{llr}
+  \toprule[0.2em]
+ Religion & Income & Frequency \\
+  \midrule
+  Agnostic & $<$\$10k &  27 \\
+  Agnostic & \$10-20k &  34 \\
+  Agnostic & \$20-30k &  60 \\
+  Agnostic & \$30-40k &  81 \\
+  Agnostic & \$40-50k &  76 \\
+  Agnostic & \$50-75k & 137 \\
+  Agnostic & \$75-100k & 122 \\
+  Agnostic & \$100-150k & 109 \\
+  Agnostic & $>$150k &  84 \\
+  Agnostic & Don't know/refused &  96 \\
+   \bottomrule[0.2em]
+\end{tabular}
+\end{table}
+
+Tidy data: (1) every observation is a row; (2) every variable is a column; (3) every data set contains a single type of observation.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{\texttt{dplyr} \& \texttt{tidyr}}
+
+Worth investing a lot of time in mastering these 2 packages:
+
+\begin{itemize}
+\item \texttt{mutate}: creating new variables;
+\item \texttt{rename}: renaming variables;
+\item \texttt{case\_when}: recoding;
+\item \texttt{left\_join}: data merging (only one of the functions in the family);
+\item \texttt{filter}: data subsetting;
+\item \texttt{select}: selecting columns (or excluding them).
+\end{itemize}\bigskip
+
+\texttt{pivot\_wider()} and \texttt{pivot\_longer()} from \texttt{tidyr} do data reshaping in a very flexible way.
+
+\end{frame}
+
+
+% FRAME
+\begin{frame}[plain]
+\begin{center}
+    \Huge Thank \textcolor{title}{you} for the kind attention!
+\end{center}
+\end{frame}
+
+
+% REFERENCES
+\begin{frame}[allowframebreaks]
+\frametitle{References}
+\bibliographystyle{apacite}
+\bibliography{Bibliography}
+\end{frame}
+
+\end{document}

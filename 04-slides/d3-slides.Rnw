@@ -1,0 +1,833 @@
+% Taken from: https://mikedewar.wordpress.com/2009/02/25/latex-beamer-python-beauty/
+\documentclass[12pt,english,pdf,xcolor=dvipsnames,aspectratio=169]{beamer}
+\usetheme{default}
+\beamertemplatenavigationsymbolsempty
+\definecolor{fore}{RGB}{51,51,51}
+\definecolor{back}{RGB}{255,255,255}
+\definecolor{title}{RGB}{255,0,90}
+\setbeamercolor{titlelike}{fg=title}
+\setbeamercolor{normal text}{fg=fore,bg=back}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{mathpazo}
+\usepackage{inputenc}
+\usepackage{parskip}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\usepackage{hyperref}
+\hypersetup{pdfauthor={Constantin Manuel Bosancianu},
+pdftitle={Multilevel Modeling},
+pdfsubject={Day 3: Modeling Change over Time},
+pdfkeywords={Bamberg, workshop, MLM, slides, 2021}}
+\usepackage{babel}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.10}
+\usepgfplotslibrary{fillbetween}
+% Defines a checkmark
+\def\checkmark{\tikz\fill[scale=0.4,color=title](0,.35) -- (.25,0) -- (1,.7) -- (.25,.15) -- cycle;}
+\setbeamertemplate{itemize items}{\checkmark}
+% For table captions in Beamer
+\usepackage{caption}
+\captionsetup[figure]{labelfont={color=title}, labelformat=empty}
+\captionsetup[table]{labelfont={color=title}, labelformat=empty}
+% Color of enumerate items
+\setbeamercolor{enumerate item}{fg=title}
+\usepackage{tikz, tikz-cd, animate}
+\usetikzlibrary{shapes,backgrounds,trees}
+\usetikzlibrary{decorations.pathreplacing}
+\usepackage{pgfplotstable}
+\usepackage{wrapfig}
+\usepackage{booktabs}
+\usepackage{dcolumn}
+\usepackage[sectionbib]{apacite}
+\renewcommand{\bibliographytypesize}{\footnotesize}
+% Set the design of the footer
+\makeatletter
+\setbeamertemplate{title page}[default][left]
+\@addtoreset{subfigure}{figure}
+\setbeamercolor{author in head/foot}{fg=white, bg=fore}
+\setbeamercolor{date in head/foot}{fg=white, bg=fore}
+\setbeamercolor{institute in head/foot}{fg=white, bg=fore}
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot}\insertauthor
+  \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,center]{institute in head/foot}%
+    \usebeamerfont{institute in head/foot}Bamberg
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.3333333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+    \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+    \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+\makeatother
+\title{Multilevel Modeling: Principles and Applications in \texttt{R}}
+\subtitle{Day 3: Modeling Change over Time}
+\author{Constantin Manuel Bosancianu}
+\institute{WZB Berlin Social Science Center \\ \textit{Institutions and Political Inequality}\\\href{mailto:manuel.bosancianu@gmail.com}{manuel.bosancianu@gmail.com}}
+\date{January 22, 2021}
+\begin{document}
+\maketitle
+
+
+% PREAMBLE %
+\section{Preamble}
+\begin{frame}
+  \frametitle{Up until now\dots}
+
+<<r setup, include = FALSE, warning=FALSE, message=FALSE, comment=NA, results='hide'>>=
+# Setup chunk
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      comment = NA,
+                      eval = TRUE)
+
+check.packages <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE,
+                     repos = "https://cran.rstudio.com")
+  sapply(pkg, require, character.only = TRUE)
+}
+
+pkgList <- c("tidyverse","scales","texreg","nlme","broom",
+             "arm","kableExtra","broom.mixed","ggeffects",
+             "interplot","ggthemes","xtable")
+check.packages(pkgList)
+
+# Define the color scheme for all the plots in the slides
+scale_fill_Pres <- function(...){
+  library(scales)
+  discrete_scale("fill","Publication",
+                 manual_pal(values = c("#386cb0","#fdb462","#7fc97f",
+                                       "#ef3b2c","#662506","#a6cee3",
+                                       "#fb9a99","#984ea3","#ffff33")), ...)
+}
+
+scale_colour_Pres <- function(...){
+  library(scales)
+  discrete_scale("colour","Publication",
+                 manual_pal(values = c("#386cb0","#fdb462","#7fc97f",
+                                       "#ef3b2c","#662506","#a6cee3",
+                                       "#fb9a99","#984ea3","#ffff33")), ...)
+}
+
+# Logical switch for generating output
+generateFigs <- FALSE
+@
+
+I have treated individuals as the L1 unit, with frequent examples where such individuals are nested in higher-order units:
+
+\begin{itemize}
+\item voters nested in countries\pause
+\item students nested in classrooms, further nested in schools\pause
+\item companies nested in regions
+\end{itemize}\bigskip\pause
+
+The variation we were interested in explaining occurred between groups.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{\dots but today\dots}
+
+We turn the logic around, by applying the MLM logic to an instance where the L2 ``groups'' are actually single units: individuals, companies, countries.\bigskip\pause
+
+The L1 observations are measurements over time on these single units: performance on tests, share price, level of income inequality.\bigskip\pause
+
+It takes some practice to adjust the interpretation of some of the measures from the past 2 days, e.g. ICC, to this new data configuration, but the MLM framework applies very well.
+
+\end{frame}
+
+
+\section{Introduction}
+\begin{frame}[plain]
+\begin{center}
+    \Huge Change over time
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{2 kinds of questions}
+
+<<r showing-change-1-NOT-USED, eval=generateFigs>>=
+load("../../../../11-Data-repository/14-SWIID/swiid9_0.rda")
+
+swiid <- swiid_summary
+rm(swiid_summary)
+
+graph1 <- swiid %>%
+  dplyr::select(-c(gini_disp_se,gini_mkt,gini_mkt_se,
+                   redist_after,redist,abs_red,
+                   abs_red_se,rel_red,rel_red_se)) %>%
+  rename(gini = gini_disp) %>%
+  mutate(country = as.character(country),
+         year = as.numeric(year),
+         country = ifelse(country=="Korea", "South Korea", country)) %>%
+  filter(year >= 1990) %>%
+  mutate(cluster = case_when(year >= 1990 & year <= 1994 ~ 1,
+                             year >= 1995 & year <= 1999 ~ 2,
+                             year >= 2000 & year <= 2004 ~ 3,
+                             year >= 2005 & year <= 2009 ~ 4,
+                             year >= 2010 & year <= 2014 ~ 5,
+                             year >= 2015 & year <= 2019 ~ 6)) %>%
+  group_by(country, cluster) %>%
+  summarise(gini = mean(gini, na.rm = TRUE)) %>%
+  filter(country %in% c("Australia","Belgium","Brazil","Canada","Germany",
+                        "France","Denmark","Norway","Chile","India",
+                        "Argentina","Russia","Egypt","United Kingdom",
+                        "Hungary","Italy")) %>%
+  ggplot(aes(x = cluster,
+             y = gini)) +
+  geom_point(size = 4) +
+  labs(x = "Time period",
+       y = "Average Gini") +
+  theme_clean() +
+  facet_wrap(.~country, ncol = 4) +
+  theme(axis.text.x = element_text(angle = 45, size = 12, hjust = 0.75),
+        axis.text.y = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        axis.title = element_text(size = 14)) +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6),
+                     labels = c("90-94","95-99","00-04","05-09",
+                                "10-14","15-19"))
+ggsave(graph1,
+       file = "../03-graphs/03-01.pdf",
+       height = 9, width = 12)
+rm(graph1)
+@
+
+<<r showing-change-1, eval=generateFigs>>=
+tolDF <- read.table("../02-data/ALDA_tolerance_data.txt",
+                    header = TRUE,
+                    sep = ",")
+
+graph1 <- tolDF %>%
+  filter(id %in% c(514, 723, 949, 1552,
+                   45, 1653, 268, 569)) %>%
+  ggplot(aes(x = time,
+             y = tolerance)) +
+  geom_point(size = 4) +
+  labs(x = "Time of measurement",
+       y = "Tolerance score") +
+  theme_clean() +
+  facet_wrap(.~id, ncol = 4) +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.background = element_rect(fill = NA, color = "black"))
+
+ggsave(graph1,
+       file = "../03-graphs/03-01.pdf",
+       height = 4, width = 12)
+rm(graph1)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.45]{../03-graphs/03-01}
+\end{figure}\bigskip
+
+\begin{columns}
+\begin{column}{0.5\textwidth}
+How is the pattern of change over time---linear, non-linear? (L1 model)
+\end{column}\pause
+\begin{column}{0.5\textwidth}
+Do different kinds of units experience different types of change? (L2 model)
+\end{column}
+\end{columns}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Different perspective}
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<2->\oldfootnoterule}
+\begin{table}
+\centering
+\footnotesize
+\begin{tabular}{l p{4.5cm} p{4.5cm}}
+\toprule[0.2em]
+        & Cross-sectional & Longitudinal \\
+\midrule
+ICC     & High value denotes group differences & High value denotes individual differences \\
+Focus   & L2 \& L1*L2 effects & L1 \& L1*L2 effects \\
+Cross-level interactions & Added bonus & Vital component \\
+\bottomrule[0.2em]
+\end{tabular}
+\end{table}\bigskip\pause
+
+The approach should not be applied in every setting, though:
+
+\begin{itemize}
+\item 3 or more measurement time points;\only<2->{\footnote{2 points make it difficult to distinguish pattern of change, and cannot disentangle change from measurement error.}}\pause
+\item sufficient variance over time in outcome.
+\end{itemize}
+\egroup
+
+\end{frame}
+
+
+\begin{frame}{Measuring time}
+You might opt for the natural metric (minutes, days, weeks, years), but you have more freedom than this: (1) number of sessions of treatment; (2) number of trips taken; (3) distance traveled; (4) school grade.\bigskip\pause
+
+Another choice is the measurement interval---the MLM framework can accommodate:
+
+\begin{itemize}
+\item equally spaced intervals \pause
+\item varying spacing, depending on where the rate of change is higher
+\end{itemize}\bigskip\pause
+
+Other choices: structured vs. unstructured schedule of measurement across individuals.
+
+\end{frame}
+
+
+\section{Specifications}
+\begin{frame}[plain]
+\begin{center}
+	\Huge L1 trends
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Describe longitudinal trend (1)}
+The first goal is to describe the change (\textit{growth trajectory}) using empirical growth plots.\pause
+
+Use a nonparametric functional form, e.g. \textit{lowess}, to allow the data to speak for itself, and then try to visually capture commonalities in trajectories.
+
+<<r showing-change-2, eval=generateFigs>>=
+graph2 <- tolDF %>%
+  filter(id %in% c(514, 723, 949, 1552,
+                   45, 1653, 268, 569)) %>%
+  ggplot(aes(x = time,
+             y = tolerance)) +
+  geom_point(size = 4) +
+  labs(x = "Time of measurement",
+       y = "Tolerance score") +
+  theme_clean() +
+  geom_smooth(method = "loess", se = FALSE, span = 1) +
+  facet_wrap(.~id, ncol = 4) +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.background = element_rect(fill = NA, color = "black"))
+
+ggsave(graph2,
+       file = "../03-graphs/03-02.pdf",
+       height = 4, width = 12)
+rm(graph2)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.4]{../03-graphs/03-02}
+\end{figure}
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Describe longitudinal trend (2)}
+Try to see how a parametric form works, e.g. OLS, in capturing the trends you have observed.\pause
+
+<<r showing-change-3, eval=generateFigs>>=
+graph3 <- tolDF %>%
+  filter(id %in% c(514, 723, 949, 1552,
+                   45, 1653, 268, 569)) %>%
+  ggplot(aes(x = time,
+             y = tolerance)) +
+  geom_point(size = 4) +
+  labs(x = "Time of measurement",
+       y = "Tolerance score") +
+  theme_clean() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(.~id, ncol = 4) +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.background = element_rect(fill = NA, color = "black"))
+
+ggsave(graph3,
+       file = "../03-graphs/03-03.pdf",
+       height = 4, width = 12)
+rm(graph3)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.45]{../03-graphs/03-03}
+\end{figure}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Describe longitudinal trend (3)}
+Finally, if still far from a proper description, alter the parametric form by allowing for non-constant change over time.\pause
+
+<<r showing-change-4, eval=generateFigs>>=
+graph4 <- tolDF %>%
+  filter(id %in% c(514, 723, 949, 1552,
+                   45, 1653, 268, 569)) %>%
+  ggplot(aes(x = time,
+             y = tolerance)) +
+  geom_point(size = 4) +
+  labs(x = "Time of measurement",
+       y = "Tolerance score") +
+  theme_clean() +
+  facet_wrap(.~id, ncol = 4) +
+    geom_smooth(method = "lm", se = FALSE, formula = y ~ x + I(x^2), size = 1) +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        strip.text.x = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        panel.background = element_rect(fill = NA, color = "black"))
+
+ggsave(graph4,
+       file = "../03-graphs/03-04.pdf",
+       height = 4, width = 12)
+rm(graph4)
+@
+
+\begin{figure}
+\centering
+\includegraphics[scale = 0.45]{../03-graphs/03-04}
+\end{figure}
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Describe longitudinal trend (4)}
+Use the automated tool we've relied on in the past 2 days (\texttt{dplyr} + \texttt{broom} + \texttt{purrr}) to produce quick summaries for each individual:
+
+\begin{itemize}
+\item intercept and the slope (rate of change over time) \pause
+\item correlation between intercept and slope
+\end{itemize}\bigskip
+\pause
+
+More informative: split these trends up based on theoretically-relevant time-invariant (i.e. individual-level) predictors.
+
+\end{frame}
+
+
+
+\begin{frame}[fragile]
+  \frametitle{Describe longitudinal trend (5)}
+
+<<r describe-change-numeric, eval=generateFigs>>=
+resultsDF <- tolDF %>%
+  filter(id %in% c(514, 723, 949, 1552,
+                   45, 1653, 268, 569)) %>%
+  dplyr::select(-age, -male, -exposure) %>%
+  mutate(quad = time*time) %>%
+  nest(data = -id) %>%
+  mutate(fit = map(data, ~ lm(tolerance ~ time + quad,
+                              data = .)),
+         tidied = map(fit, tidy)) %>%
+  unnest(tidied) %>%
+  dplyr::select(-data) %>%
+  dplyr::select(-fit, -std.error, -statistic, -p.value) %>%
+  pivot_wider(id_cols = "id",
+              names_from = "term",
+              values_from = "estimate") %>%
+  rename(ID = 1,
+         Intercept = 2,
+         Time = 3,
+         `Time squared` = 4)
+
+print(xtable(resultsDF, type = "latex"),
+      include.rownames = FALSE)
+@
+
+\begin{table}
+\centering
+\begin{tabular}{lccc}
+  \toprule
+ \textbf{ID} & \textbf{Intercept} & \textbf{Time} & \textbf{Time sq.} \\
+  \midrule
+   45 & 1.18 & -0.01 & 0.03 \\
+  268 & 0.75 & 0.68 & -0.11 \\
+  514 & 0.82 & 0.56 & -0.05 \\
+  569 & 1.70 & 0.10 & -0.01 \\
+  723 & 1.37 & -0.10 & 0.01 \\
+  949 & 2.75 & -0.89 & 0.13 \\
+ 1552 & 0.02 & 1.02 & -0.15 \\
+ 1653 & 1.27 & -0.23 & 0.08 \\
+   \bottomrule
+\end{tabular}
+\end{table}\bigskip\pause
+
+These are preliminary exploratory phases---we haven't gotten yet to the \textit{explanatory} one.
+
+\end{frame}
+
+
+\subsection{Model specifications}
+\begin{frame}[plain]
+\begin{center}
+	\Huge Model specifications
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Multilevel model for change (1)}
+
+\bgroup
+\let\oldfootnoterule\footnoterule
+\def\footnoterule{\only<3->\oldfootnoterule}
+\begin{itemize}
+\item L1 model: describes change over time---\textit{individual growth model}\pause
+\item L2 model: describes inter-individual variation in this rate of change
+\end{itemize}\bigskip\pause
+
+Assume a very straightforward linear form:\only<3->{\footnote{I find Singer and Willett's notation convention a bit imprecise, e.g. the way that the position of the indicator for child, $i$, changes from one subscript to another. This is why I use a slightly altered notation.}}
+
+\begin{equation}
+\centering
+TOL_{ti} = \beta_{0i} + \beta_{1i}TIME_{ti} + \epsilon_{ti}
+\end{equation}\bigskip\pause
+
+We're saying with that specification: each individual's level of tolerance has a linear growth pattern, described by individual growth parameters $\beta_{0i}$ and $\beta_{1i}$.
+\egroup
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Multilevel model for change (2)}
+
+It's harder to claim that $\epsilon_{ti}$ are i.i.d, but we can accommodate a variety of error structures.\bigskip\pause
+
+\begin{equation}
+\centering
+\begin{cases}
+\beta_{0i} = \gamma_{00} + \gamma_{01}FEM_{i} + \upsilon_{0i} \\
+\beta_{1i} = \gamma_{10} + \gamma_{11}FEM_{i} + \upsilon_{1i}
+\end{cases}
+\end{equation}\bigskip\pause
+
+The L2 (individual) model links the variation in individual growth trajectories to time-invariant characteristics of individuals.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Composite model}
+
+\begin{equation}
+  \centering
+\begin{cases}
+TOL_{ti} = \beta_{0i} + \beta_{1i}TIME_{ti} + \epsilon_{ti}\\
+\beta_{0i} = \gamma_{00} + \gamma_{01}FEM_{i} + \upsilon_{0i}\\
+\beta_{1i} = \gamma_{10} + \gamma_{11}FEM_{i} + \upsilon_{1i}
+\end{cases}
+\end{equation}\pause
+
+
+\begin{equation}
+  \centering
+\begin{aligned}
+TOL_{ti}={} & (\gamma_{00} + \gamma_{01}*FEM_{i} + \upsilon_{0i}) + \\
+& + (\gamma_{10} + \gamma_{11}*FEM_{i} + \upsilon_{1i})*TIME_{ti} + \epsilon_{ti} =
+     \\ \\
+ ={} & \gamma_{00} + \gamma_{10}*TIME_{ti} + \gamma_{01}*FEM_{i} + \gamma_{11}*TIME_{ti}*FEM_{i} + \\ & + \upsilon_{1i}*TIME_{ti} + \upsilon_{0i} + \epsilon_{ti}
+\end{aligned}
+\end{equation}\pause
+
+$\epsilon_{ti}$ likely have a more complex structure than before, because of auto-correlation.
+
+\end{frame}
+
+
+\subsection{Interpretation}
+\begin{frame}
+  \frametitle{Meaning of estimates (1)}
+
+\begin{equation}
+\centering
+\begin{aligned}
+TOL_{ti}={} & \gamma_{00} + \gamma_{10}*TIME_{ti} + \gamma_{01}*FEM_{i} + \gamma_{11}*TIME_{ti}*FEM_{i} + \\ & + \upsilon_{1i}*TIME_{ti} + \upsilon_{0i} + \epsilon_{ti}
+\end{aligned}
+\end{equation}\bigskip\pause
+
+\begin{equation}
+FEM_{i} = 0 \Rightarrow
+\begin{cases}
+Initial\; status = \gamma_{00} \\
+Rate\; of\; change = \gamma_{10}
+\end{cases}
+\end{equation}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Meaning of estimates (2)}
+
+\begin{equation}
+\centering
+\begin{aligned}
+TOL_{ti}={} & \gamma_{00} + \gamma_{10}*TIME_{ti} + \gamma_{01}*FEM_{i} + \gamma_{11}*TIME_{ti}*FEM_{i} + \\ & + \upsilon_{1i}*TIME_{ti} + \upsilon_{0i} + \epsilon_{ti}
+\end{aligned}
+\end{equation}
+
+If $FEM_i=1$,\pause
+
+\begin{equation}
+\centering
+\begin{aligned}
+TOL_{ti}={} & \gamma_{00} + \gamma_{10}*TIME_{ti} + \gamma_{01}*1 + \gamma_{11}*TIME_{ti}*1 + \\ & + \upsilon_{1i}*TIME_{ti} + \upsilon_{0i} + \epsilon_{ti} = \\ \\
+={} & (\gamma_{00} + \gamma_{01}) + (\gamma_{10} + \gamma_{11})*TIME_{ti} + \\ & + \upsilon_{1i}*TIME_{ti} + \upsilon_{0i} + \epsilon_{ti}
+\end{aligned}
+\end{equation}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Meaning of estimates (3)}
+  
+\begin{equation}
+FEM_{i} = 1 \Rightarrow
+\begin{cases}
+Initial\; status = \gamma_{00} + \textcolor{title}{\gamma_{01}} \\
+Rate\; of\; change = \gamma_{10} + \textcolor{title}{\gamma_{11}}
+\end{cases}
+\end{equation}\bigskip\pause
+
+$\upsilon_{0i}$ and $\upsilon_{1i}$ are all normally distributed, with constant variance, and we also get $Cov(\upsilon_{0i}; \upsilon_{1i})$---the association between baseline value and rate of growth.
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Interpretation of coefficients}
+
+\begin{itemize}
+\item $\gamma_{00}$: average baseline value in the sample for boys ($FEM=0$) \pause
+\item $\gamma_{10}$: average rate of change in the sample for boys ($FEM=0$) \pause
+\item $\gamma_{01}$: average difference in baseline value between boys and girls \pause
+\item $\gamma_{11}$: average difference in rate of change between boys and girls
+\end{itemize}\bigskip\pause
+
+Additional predictors for individual intercepts or slopes can be added, slightly altering the interpretations above.
+
+\end{frame}
+
+
+
+\subsection{Unconditional specifications}
+\begin{frame}
+  \frametitle{Unconditional means \& unconditional growth}
+
+\textbf{Unconditional means} is what we called in past days the ``null model''.
+
+\begin{equation}
+\centering
+\begin{cases}
+TOL_{ti} = \beta_{0i} + \epsilon_{ti}\\
+\beta_{0i} = \gamma_{00} + \upsilon_{0i}
+\end{cases}
+\end{equation}\bigskip\pause
+
+As before, we use it to determine the ICC: $\frac{\sigma_{\upsilon}^2}{\sigma_{\upsilon}^2 + \sigma_{\epsilon}^2}$ (it also quantifies the autocorrelation between $\epsilon_{ti})$.\bigskip\pause
+
+\begin{equation}
+\centering
+\begin{cases}
+TOL_{ti} = \beta_{0i} + \beta_{1i}*TIME_{ti} + \epsilon_{ti}\\
+\beta_{0i} = \gamma_{00} + \upsilon_{0i} \\
+\beta_{1i} = \gamma_{10} + \upsilon_{1i}
+\end{cases}
+\end{equation}
+
+\end{frame}
+
+
+
+\begin{frame}
+  \frametitle{Building up models}
+
+We follow-up on these models by adding predictors at the individual-level (L2) that explain both initial status and rate of change, like in our earlier example with gender.\bigskip
+
+\begin{equation}
+\centering
+L2 =
+\begin{cases}
+\beta_{0i} = \gamma_{00} + \gamma_{01}*FEM_i + \upsilon_{0i} \\
+\beta_{1i} = \gamma_{10} + \gamma_{11}*FEM_i + \upsilon_{1i}
+\end{cases}
+\end{equation}\pause
+
+Enough flexibility to be able to handle:
+
+\begin{itemize}
+\item differences between individuals in timing of measurement \pause
+\item differences between individuals in number of time points measured
+\end{itemize}
+
+\end{frame}
+
+\subsection{Time-varying predictors}
+\begin{frame}
+\begin{center}
+	\Huge Time-varying predictors
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Adding L1 predictors}
+\begin{equation}
+\centering
+\begin{cases}
+TOL_{ti} = \beta_{0i} + \beta_{1i}*TIME_{ti} + \beta_{2i}*EXP_{ti} + \epsilon_{ti}\\
+\beta_{0i} = \gamma_{00} + \gamma_{01}*FEM_i + \upsilon_{0i} \\
+\beta_{1i} = \gamma_{10} + \gamma_{11}*FEM_i + \upsilon_{1i} \\
+\beta_{2i} = \gamma_{20}
+\end{cases}
+\end{equation}\pause
+
+\begin{itemize}
+\item $\gamma_{10}$: average rate of change for boys, after controlling for $EXP_{ti}$\pause
+\item $\gamma_{20}$: effect on $TOL_{ti}$ of being exposed to more friends who are norm-breakers\pause
+\item $\gamma_{11}$: the change in the gap in $TOL_{ti}$ between girls and boys for every passing unit of $TIME$
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Limitations}
+Severe imbalances in the number of time points of measurement for individuals will make estimating many random effects difficult.\bigskip\pause
+
+A small number of measurement waves means you'll be constrained in how many random effects can be specified at L1.\bigskip\pause
+
+Only linear and continuous change can be modeled with this specification.
+\end{frame}
+
+
+\section{Non-linear change}
+\begin{frame}[plain]
+\begin{center}
+	\Huge Non-linear change
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Non-linear change and thresholds (1)}
+At particular turning points (PhD graduation, arrival of first child) both rates of growth and outcome level could change.\bigskip\pause
+
+Adding such a predictor to the L1 specification would reveal any change in elevation.\bigskip\pause
+
+Adding a recoded version of time ($POSTTIME$) to the model assesses changes in slope.
+
+\begin{equation}
+\centering
+POSTTIME_{ti} =
+\begin{cases}
+0,& all\; time\; points\; before\; threshold\; event \\
+TIME,& after\; threshold\; event
+\end{cases}
+\end{equation}\pause
+
+Adding both models produces changes in both slope and elevation.
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Non-linear change and thresholds (2)}
+
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[scale=1.5]
+% Axes
+\draw[thick, <->, >=stealth] (0,-1.5)--(0,1.5);
+\draw[thick, <->, >=stealth] (-1.5,0)--(1.5,0);
+% Arcs
+\draw [very thick, domain=10:80] plot ({cos(\x)}, {sin(\x)});
+\draw [very thick, domain=100:170] plot ({cos(\x)}, {sin(\x)});
+\draw [very thick, domain=190:260] plot ({cos(\x)}, {sin(\x)});
+\draw [very thick, domain=280:350] plot ({cos(\x)}, {sin(\x)});
+% Arrows
+\draw[thick, ->, >=stealth] (0.7071068,0.7071068)--(0.9,0.9);
+\draw[thick, ->, >=stealth] (0.7071068,-0.7071068)--(0.9,-0.9);
+\draw[thick, ->, >=stealth] (-0.7071068,-0.7071068)--(-0.9,-0.9);
+\draw[thick, ->, >=stealth] (-0.7071068,0.7071068)--(-0.9,0.9);
+% Markings
+\node[draw=none] at (0,1.6) {\footnotesize{Y up:}};
+\node[draw=none] at (0,1.8) {\footnotesize{$Y^2$}};
+\node[draw=none] at (0,2.0) {\footnotesize{$Y^3$}};
+\node[draw=none] at (0,-1.6) {\footnotesize{Y down:}};
+\node[draw=none] at (0,-1.85) {\footnotesize{$\sqrt{Y}$}};
+\node[draw=none] at (0,-2.1) {\footnotesize{$log(Y)$}};
+\node[draw=none] at (1.8,0.1) {\footnotesize{TIME up:}};
+\node[draw=none] at (1.8,-0.1) {\footnotesize{$TIME^2$, $TIME^3$}};
+\node[draw=none] at (-2.2,0.1) {\footnotesize{TIME down:}};
+\node[draw=none] at (-2.2,-0.15) {\footnotesize{$log(TIME)$, $\sqrt{TIME}$}};
+\end{tikzpicture}
+\caption{Mosteller and Tukey's \citeyear[p.~84]{Mosteller1977} set of rules for transformations.}
+\label{fig:fig-01}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Non-linear change and thresholds (3)}
+
+Model curvilinearity through the use of polynomials of $TIME$ (the previous solution treated it as a nuisance to be corrected).\bigskip
+
+\begin{itemize}
+\item \textit{no change}: eliminating $TIME$ as a predictor
+\item \textit{linear change}: using $TIME$\pause
+\item \textit{quadratic change}: using $TIME$ and $TIME^2$\pause
+\item \textit{cubic change}: using $TIME$, $TIME^2$ and $TIME^3$
+\end{itemize}\bigskip\pause
+
+Use GoF criteria to determine the moment at which you're overfitting the data.
+
+\end{frame}
+
+
+% FRAME
+\begin{frame}
+
+\begin{center}
+    \Huge I hope you enjoyed the workshop!\bigskip
+    
+    Let's keep in touch: \textcolor{title}{\href{mailto:manuel.bosancianu@gmail.com}{manuel.bosancianu@gmail.com}}
+\end{center}
+\end{frame}
+
+
+% REFERENCES
+\begin{frame}
+\frametitle{References}
+\bibliographystyle{apacite}
+\bibliography{Bibliography}
+\end{frame}
+
+\end{document}
