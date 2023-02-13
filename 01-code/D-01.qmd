@@ -176,13 +176,13 @@ df_nopool %>%
         axis.text.y = element_text(size = 14))
 ```
 
-The challenge with this approach is that the only information used in the estimation originates with the group itself. Take as an example the case of Poland. Suppose that instead of 1,892 cases, it had 425 observations (about 20% of the original sample).
+The challenge with this approach is that the only information used in the estimation originates with the group itself. Take as an example the case of Poland. Suppose that instead of 1,892 cases, it had 190 observations (about 10% of the original sample).
 
 ```{r prepare-data-poland}
 set.seed(395722)
 df_pl <- df_issp %>%
     filter(cnt == "PL") %>%
-    slice_sample(n = 425)
+    slice_sample(n = 190)
 
 df_issp_temp <- rbind(filter(df_issp, !(cnt == "PL")),
                       df_pl)
